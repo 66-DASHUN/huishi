@@ -1,0 +1,39 @@
+﻿{% extends "base.html" %}
+{% block title %}账户中心 - 绘世{% endblock %}
+{% block body_class %}workspace-page{% endblock %}
+{% block content %}
+<main class="simple-page">
+  <nav class="simple-nav">
+    <a href="/">绘世</a>
+    <a href="/workspace">工作台</a>
+    <a href="/pricing">充值</a>
+    {% if user["role"] == "admin" %}<a href="/admin/">管理后台</a>{% endif %}
+    <a href="/logout">退出</a>
+  </nav>
+  <header class="account-summary">
+    <div>
+      <span>ACCOUNT</span>
+      <h1>账户中心</h1>
+      <p>{{ user["username"] }}</p>
+    </div>
+    <strong>{{ user["points"] }} 点</strong>
+  </header>
+  <div class="section-heading">
+    <h2>最近流水</h2>
+    <a href="/pricing">充值</a>
+  </div>
+  <div class="ledger-list">
+    {% for item in ledger %}
+    <article class="ledger-row">
+      <strong>{{ item["reason"] }}</strong>
+      <span>{{ item["delta"] }} 点</span>
+      <span>{{ item["created_at"] }}</span>
+      {% if item["admin_note"] %}<small>{{ item["admin_note"] }}</small>{% endif %}
+    </article>
+    {% else %}
+    <p class="empty-workspace">暂无流水。</p>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}
+

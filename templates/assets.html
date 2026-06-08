@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}资产库 - 绘世{% endblock %}
+{% block body_class %}workspace-page{% endblock %}
+{% block content %}
+<main class="studio-shell assets-shell" data-studio-theme="mist">
+  {% set active_nav = "assets" %}
+  {% include "partials/studio_nav.html" %}
+  <section class="studio-main assets-main">
+    <header class="asset-topbar">
+      <div>
+        <p class="asset-eyebrow">Asset Library</p>
+        <h1>图片资产</h1>
+      </div>
+      <div class="asset-actions">
+        <label class="asset-search"><span>⌕</span><input id="asset-search" type="search" placeholder="搜索提示词"></label>
+        <button type="button" data-filter-open aria-expanded="false" aria-controls="asset-filter-drawer">筛选</button>
+        <button type="button" data-batch-toggle aria-pressed="false">批量操作</button>
+      </div>
+    </header>
+
+    <nav class="asset-subtabs" aria-label="图片筛选">
+      <button type="button" class="is-active" data-asset-filter="all">全部图片</button>
+      <button type="button" data-asset-filter="favorite">我的收藏</button>
+    </nav>
+
+    <aside class="asset-filter-drawer" id="asset-filter-drawer" hidden>
+      <label>模式
+        <select data-filter-mode>
+          <option value="">全部</option>
+          <option value="text">文生图</option>
+          <option value="reference">参考图生成</option>
+        </select>
+      </label>
+      <label>时间
+        <select data-filter-time>
+          <option value="">全部</option>
+          <option value="today">今天</option>
+          <option value="7">最近 7 天</option>
+          <option value="30">最近 30 天</option>
+        </select>
+      </label>
+      <label>比例
+        <select data-filter-ratio>
+          <option value="">全部</option>
+          <option>1:1</option>
+          <option>16:9</option>
+          <option>9:16</option>
+          <option>3:2</option>
+          <option>2:3</option>
+        </select>
+      </label>
+      <label>清晰度
+        <select data-filter-resolution>
+          <option value="">全部</option>
+          <option>1K</option>
+          <option>2K</option>
+          <option>4K</option>
+        </select>
+      </label>
+      <div class="filter-actions">
+        <button type="button" data-filter-reset>重置</button>
+        <button type="button" data-filter-apply>应用</button>
+      </div>
+    </aside>
+
+    <div class="asset-batchbar" hidden>
+      <span data-selected-count>已选择 0 张</span>
+      <button type="button" data-bulk-favorite>收藏</button>
+      <button type="button" data-bulk-unfavorite>取消收藏</button>
+      <button type="button" data-bulk-download>下载</button>
+      <button type="button" data-bulk-delete>删除</button>
+      <button type="button" data-batch-clear>退出批量</button>
+    </div>
+
+    <section class="asset-date-group">
+      <div class="asset-grid asset-library">
+        {% for record in records %}
+        <article class="asset-tile" data-prompt="{{ record['prompt'] }}" data-resolution="{{ record['resolution'] }}" data-favorite="{{ record['favorite'] }}" data-mode="{{ record['mode'] }}" data-ratio="{{ record['ratio'] }}" data-created-at="{{ record['created_at'] }}">
+          <label class="asset-select-wrap">
+            <input class="asset-select" type="checkbox" value="{{ record['id'] }}" aria-label="选择资产">
+          </label>
+          <a class="asset-thumb" href="/assets/{{ record['id'] }}?from=assets" data-detail-link>
+            <img src="{{ record['image_path'] }}" alt="{{ record['prompt'] }}" loading="lazy" decoding="async">
+          </a>
+          <div class="asset-card-body">
+            <strong title="{{ record['prompt'] }}">{{ record["prompt"] }}</strong>
+            <span>{{ "文生图" if record["mode"] == "text" else "参考图" }} · {{ record["ratio"] }} · {{ record["resolution"] }}</span>
+          </div>
+          <div class="asset-tile-actions">
+            <a href="/assets/{{ record['id'] }}?from=assets" data-detail-link>查看详情</a>
+            <a class="asset-edit-action" href="/workspace?edit_record={{ record['id'] }}">再次编辑</a>
+          </div>
+        </article>
+        {% else %}
+        <div class="empty-workspace">暂无资产，生成后的图片会出现在这里。</div>
+        {% endfor %}
+      </div>
+      <p class="asset-empty-state" data-asset-empty hidden>没有匹配的图片。</p>
+    </section>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+<script src="{{ url_for('static', filename='js/assets.js') }}"></script>
+{% endblock %}

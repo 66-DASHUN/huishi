@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}工作台 - 绘世{% endblock %}
+{% block body_class %}workspace-page{% endblock %}
+{% block content %}
+<main class="studio-shell" data-studio-theme="mist" data-edit-seed='{{ edit_seed|tojson if edit_seed else "" }}'>
+  {% set active_nav = "generate" %}
+  {% include "partials/studio_nav.html" %}
+
+  <section class="studio-main">
+    <header class="empty-topbar" aria-hidden="true"></header>
+
+    <section id="generation-task-region" class="generation-task-region" aria-live="polite">
+      <template id="generation-task-template">
+        <article class="generation-task-card is-generating">
+          <header class="generation-task-heading">
+            <strong data-task-prompt></strong>
+            <span data-task-params></span>
+          </header>
+          <div class="generation-skeleton-grid" data-task-skeletons></div>
+          <div class="generation-progress-pill">
+            <span class="task-spinner" aria-hidden="true"></span>
+            <span data-task-progress></span>
+          </div>
+          <dl class="task-failure-detail" hidden>
+            <dt>提示词</dt><dd data-task-failure-prompt></dd>
+            <dt>参数</dt><dd data-task-failure-params></dd>
+            <dt>积分</dt><dd data-task-failure-cost></dd>
+          </dl>
+        </article>
+      </template>
+    </section>
+
+    {% if current_record %}
+    <section class="creation-stream" id="current-canvas" aria-live="polite">
+      {% for record in records[:12]|reverse %}
+      {% set is_latest_record = loop.last %}
+      <article class="creation-item {{ 'is-featured' if loop.last else 'is-previous' }}" data-record-id="{{ record['id'] }}" data-record-mode="{{ record['mode'] }}" data-created-index="{{ loop.revindex0 }}">
+        <p class="creation-prompt" title="{{ record['prompt'] }}" tabindex="0">{{ record["prompt"] }}</p>
+        <div class="creation-image-grid" data-image-count="{{ record['image_paths']|length }}">
+          {% for image_path in record["image_paths"] %}
+          <figure class="creation-image-wrap">
+            <button type="button" class="image-preview-trigger" data-preview-src="{{ image_path }}" data-preview-alt="{{ record['prompt'] }}" aria-label="全屏预览图片">
+              <img {% if is_latest_record and loop.first %}id="current-image"{% endif %} src="{{ image_path }}" alt="{{ record['prompt'] }}" loading="lazy" draggable="true" data-reference-path="{{ image_path }}">
+            </button>
+          </figure>
+          {% endfor %}
+        </div>
+        <div class="creation-toolbar">
+          <div class="creation-action-group">
+            <button type="button" data-refill-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-resolution="{{ record['resolution'] }}">重新编辑</button>
+            <button type="button" data-regenerate-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-resolution="{{ record['resolution'] }}">再次生成</button>
+            <a href="/assets/{{ record['id'] }}?from=workspace" data-detail-link>查看参数</a>
+          </div>
+          <footer class="creation-meta" {% if loop.last %}id="current-meta"{% endif %} aria-label="生成参数">
+            <span>{{ record["ratio"] }}</span>
+            <span>{{ record["resolution"] }}</span>
+            <span>{{ record["actual_size"] }}</span>
+            <span>{{ record["points_charged"] }} pts</span>
+          </footer>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+    {% else %}
+    <section class="empty-creation-stage" id="current-canvas" aria-live="polite">
+      <h1>你好，想创作什么？</h1>
+    </section>
+    {% endif %}
+
+    {% if g.user["email"] and not g.user["email_verified"] and g.user["role"] != "admin" %}
+    <p class="generation-status is-error" id="generation-status" aria-live="polite">
+      请先完成邮箱验证后再生成图片，<a href="/verify-email">去输入验证码</a>。
+    </p>
+    {% else %}
+    <p class="generation-status" id="generation-status" aria-live="polite"></p>
+    {% endif %}
+
+    <form id="composer" class="composer studio-composer {{ 'is-empty-card empty-composer-card' if not current_record else 'output-composer' }}" method="post" action="/generate" enctype="multipart/form-data" novalidate
+          data-size-matrix='{{ size_matrix | tojson }}'
+          data-resolution-labels='{{ resolution_labels | tojson }}'>
+      <div class="composer-prompt-shell">
+        <textarea class="composer-prompt" name="prompt" rows="3" maxlength="1000" placeholder="输入你想生成的画面，支持中英文描述，越详细越好" required>{{ edit_seed.prompt if edit_seed else "" }}</textarea>
+        <div class="prompt-meta">
+          <span data-prompt-counter>0 / 1000</span>
+          <button type="button" data-expand-prompt aria-label="展开提示词输入框">↗</button>
+        </div>
+      </div>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="mode" id="mode" value="{{ edit_seed.mode if edit_seed else 'text' }}">
+      <input type="hidden" name="ratio" id="ratio" value="{{ edit_seed.ratio if edit_seed else '16:9' }}">
+      <input type="hidden" name="width" id="width" value="">
+      <input type="hidden" name="height" id="height" value="">
+      <input type="hidden" name="quality" id="quality" value="{{ edit_seed.quality if edit_seed else 'auto' }}">
+      <input type="hidden" name="output_format" id="output-format" value="{{ edit_seed.output_format if edit_seed else 'png' }}">
+      <input type="hidden" name="dialogue_id" id="dialogue-id" value="{{ active_dialogue['id'] if active_dialogue else '' }}">
+      <input class="reference-input" name="reference_images" id="reference-images" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+      <input type="hidden" name="reference_paths" id="reference-paths" value="">
+
+      <div class="composer-controls">
+        <div class="reference-material-stack is-empty" id="reference-material-stack" data-reference-stack>
+          <button type="button" class="reference-add-card" data-reference-add aria-label="添加素材">+</button>
+          <div class="reference-material-list" id="reference-preview" data-reference-list aria-label="参考素材"></div>
+        </div>
+        <button type="button" class="parameter-trigger ratio-trigger" data-panel-trigger="ratio-panel" aria-controls="ratio-panel" aria-expanded="false" title="画面比例"><span aria-hidden="true">⌗</span><strong id="ratio-label">16:9</strong><small aria-hidden="true">⌄</small></button>
+        <div class="dimension-inline" aria-label="自定义尺寸">
+          <input type="number" id="custom-width" class="custom-dim-input" min="64" max="8192" value="2560" placeholder="宽" aria-label="自定义宽度">
+          <span class="dim-sep">x</span>
+          <input type="number" id="custom-height" class="custom-dim-input" min="64" max="8192" value="1440" placeholder="高" aria-label="自定义高度">
+        </div>
+        <div class="count-stepper" aria-label="生成数量" title="生成数量">
+          <button type="button" data-count-step="-1" aria-label="减少数量">−</button>
+          <input name="count" type="number" min="1" max="8" value="{{ edit_seed.count if edit_seed else 1 }}" aria-label="生成数量">
+          <button type="button" data-count-step="1" aria-label="增加数量">+</button>
+        </div>
+        <button type="button" class="optimize-button" data-optimize-prompt><span aria-hidden="true">✦</span>优化提示词</button>
+        <div class="composer-meter"><strong id="estimate">2 点</strong></div>
+        <button class="generate-button" type="submit" aria-label="生成作品"><span class="generate-icon" aria-hidden="true">↑</span><span class="generate-text">生成作品</span></button>
+      </div>
+
+      <div class="parameter-popover" id="ratio-panel" hidden>
+        <span class="popover-title">选择比例</span>
+        <div class="ratio-grid" data-field="ratio">
+          <button type="button" class="is-active" data-value="16:9">16:9</button>
+          <button type="button" data-value="9:16">9:16</button>
+          <button type="button" data-value="1:1">1:1</button>
+          <button type="button" data-value="4:3">4:3</button>
+          <button type="button" data-value="3:4">3:4</button>
+          <button type="button" data-value="3:2">3:2</button>
+          <button type="button" data-value="2:3">2:3</button>
+          <button type="button" data-value="自定义" class="custom-ratio-btn">自定义</button>
+        </div>
+      </div>
+    </form>
+  </section>
+  <dialog id="points-shortage-modal" class="confirm-modal">
+    <h2>积分不足</h2>
+    <p data-shortage-message>当前积分不足，无法开始生成。</p>
+    <div class="modal-actions">
+      <a href="/pricing">去充值</a>
+      <button type="button" data-close-shortage>取消</button>
+    </div>
+  </dialog>
+
+  <dialog id="regenerate-confirm-modal" class="confirm-modal">
+    <h2>再次生成</h2>
+    <p data-regenerate-message>再次生成会消耗积分，确认继续？</p>
+    <label><input type="checkbox" data-skip-regenerate-confirm> 不再提示</label>
+    <div class="modal-actions">
+      <button type="button" data-confirm-regenerate>确认生成</button>
+      <button type="button" data-cancel-regenerate>取消</button>
+    </div>
+  </dialog>
+
+  <dialog id="image-preview-modal" class="image-preview-modal" aria-label="图片预览">
+    <button type="button" class="image-preview-close" data-close-image-preview aria-label="关闭预览">×</button>
+    <img src="" alt="">
+    <p data-image-preview-caption></p>
+  </dialog>
+
+  <dialog id="reference-preview-modal" class="image-preview-modal" aria-label="素材预览">
+    <button type="button" class="image-preview-close" data-close-reference-preview aria-label="关闭预览">×</button>
+    <img src="" alt="">
+    <p data-reference-preview-caption></p>
+  </dialog>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workspace.js') }}"></script>
+{% endblock %}

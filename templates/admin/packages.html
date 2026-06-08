@@ -1,0 +1,24 @@
+{% extends "admin/layout.html" %}
+{% block title %}套餐管理 - 绘世{% endblock %}
+{% block admin_content %}
+<h1>套餐管理</h1>
+<form method="post" class="admin-row">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input name="name" placeholder="套餐名称" required>
+  <input name="price" type="number" step="0.01" placeholder="价格" required>
+  <input name="points" type="number" placeholder="点数" required>
+  <input name="description" placeholder="描述">
+  <label><input name="enabled" type="checkbox" checked> 启用</label>
+  <button type="submit">新增</button>
+</form>
+<div class="table-list">
+  {% for package in packages %}
+  <div class="admin-row">
+    <strong>{{ package["name"] }}</strong>
+    <span>{{ "%.2f"|format(package["price_cents"] / 100) }} 元</span>
+    <span>{{ package["points"] }} 点</span>
+    <span>{{ "启用" if package["enabled"] else "停用" }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

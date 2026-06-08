@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}设置 - 绘世{% endblock %}
+{% block body_class %}workspace-page{% endblock %}
+{% block content %}
+<main class="simple-page settings-page">
+  <nav class="simple-nav"><a href="/workspace">工作台</a><a href="/assets">资产</a><a href="/account">账号</a></nav>
+  <header class="page-hero">
+    <span>SETTINGS</span>
+    <h1>设置</h1>
+  </header>
+  {% for message in get_flashed_messages() %}<p class="success-message" id="save-flash">{{ message }}</p>{% endfor %}
+  <form method="post" class="settings-form">
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <h2>图片生成</h2>
+      </div>
+      <label><span>Base URL</span><input name="base_url" value="{{ settings['base_url'] if settings else '' }}" placeholder="{{ default_base_url }}"></label>
+      <label>
+        <span>API Key{% if has_api_key %} <em class="key-saved">已保存{% if masked_api_key %}（{{ masked_api_key }}）{% endif %}，留空则不修改</em>{% endif %}</span>
+        <input name="api_key" type="password" value="" placeholder="{{ '输入新 Key 可替换当前配置' if has_api_key else '使用服务器默认配置' }}" class="{% if has_api_key %}input-has-key{% endif %}">
+      </label>
+    </section>
+    <section class="settings-section">
+      <div class="settings-section-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <h2>Prompt 优化</h2>
+      </div>
+      <label><span>Prompt 优化 API Base URL</span><input name="prompt_base_url" value="{{ app_settings.get('prompt_base_url', '') }}"></label>
+      <label>
+        <span>Prompt 优化 API Key{% if has_prompt_api_key %} <em class="key-saved">已保存{% if masked_prompt_api_key %}（{{ masked_prompt_api_key }}）{% endif %}，留空则不修改</em>{% endif %}</span>
+        <input name="prompt_api_key" type="password" value="" placeholder="{{ '输入新 Key 可替换当前配置' if has_prompt_api_key else '请输入 Prompt 优化 API Key' }}" class="{% if has_prompt_api_key %}input-has-key{% endif %}">
+      </label>
+      <label><span>Prompt 优化模型名</span><input name="prompt_model" value="{{ app_settings.get('prompt_model', '') }}" placeholder="gpt-4.1-mini"></label>
+    </section>
+    <button type="submit" class="settings-submit">保存设置</button>
+  </form>
+</main>
+{% endblock %}

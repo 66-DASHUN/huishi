@@ -1,0 +1,32 @@
+{% extends "admin/layout.html" %}
+{% block title %}记录流水 - 绘世{% endblock %}
+{% block admin_content %}
+<h1>生成记录</h1>
+<div class="table-list">
+  {% for record in records %}
+  <div class="admin-row">
+    <strong>{{ record["username"] }}</strong>
+    <span>{{ record["resolution"] }}</span>
+    <span>{{ record["points_charged"] }} 点</span>
+    <span>{{ record["prompt"] }}</span>
+    <span>{{ record["created_at"] }}</span>
+  </div>
+  {% else %}
+  <p>暂无生成记录。</p>
+  {% endfor %}
+</div>
+<h1>积分流水</h1>
+<div class="table-list">
+  {% for item in ledger %}
+  <div class="admin-row">
+    <strong>{{ item["username"] }}</strong>
+    <span>{{ item["delta"] }} 点</span>
+    <span>{{ item["reason"] }}</span>
+    <span>{{ item["admin_note"] }}</span>
+    <span>{{ item["created_at"] }}</span>
+  </div>
+  {% else %}
+  <p>暂无积分流水。</p>
+  {% endfor %}
+</div>
+{% endblock %}

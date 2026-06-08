@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}登录 - 绘世{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-panel">
+  <a class="auth-brand" href="/">绘世</a>
+  <h1>登录</h1>
+  <p class="auth-help">进入工作台、资产库和积分账户。</p>
+  {% for message in get_flashed_messages() %}<p class="form-error">{{ message }}</p>{% endfor %}
+  <form method="post" class="auth-form">
+    <label><span>账号</span><input name="email" placeholder="邮箱或管理员账号" autocomplete="username" required></label>
+    <label><span>密码</span><input name="password" placeholder="密码" type="password" autocomplete="current-password" required></label>
+    <button type="submit">进入绘世</button>
+  </form>
+  <p class="auth-switch">还没有账号？<a href="/register">创建账号</a></p>
+</main>
+{% endblock %}

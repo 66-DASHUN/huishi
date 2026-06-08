@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}注册 - 绘世{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-panel">
+  <a class="auth-brand" href="/">绘世</a>
+  <h1>创建账号</h1>
+  <p class="auth-help">注册后获得 20 点积分，可先体验文生图和参考图创作。</p>
+  {% for message in get_flashed_messages() %}<p class="form-error">{{ message }}</p>{% endfor %}
+  <form method="post" class="auth-form">
+    <label><span>邮箱</span><input name="email" placeholder="用于验证和登录" type="email" autocomplete="email" required></label>
+    <label><span>昵称</span><input name="username" placeholder="至少 2 位" autocomplete="nickname" required></label>
+    <label><span>密码</span><input name="password" placeholder="至少 6 位" type="password" autocomplete="new-password" minlength="6" required></label>
+    <button type="submit">注册并领取 20 点</button>
+  </form>
+  <p class="auth-switch">已有账号？<a href="/login">去登录</a></p>
+</main>
+{% endblock %}

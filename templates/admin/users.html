@@ -1,0 +1,89 @@
+{% extends "admin/layout.html" %}
+{% block title %}用户管理 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="page-hero admin-users-hero">
+  <div>
+    <span>USERS</span>
+    <h1>用户管理</h1>
+    <p>登录邮箱、昵称、余额、角色和运营动作都在同一张表里处理。</p>
+  </div>
+  <div class="admin-import-export">
+    <a href="/admin/users/export">导出用户 CSV</a>
+    <a href="/admin/users/import-template">下载导入模板</a>
+    <form method="post" action="/admin/users/import" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input name="file" type="file" accept=".csv,text/csv" required>
+      <button type="submit">导入 CSV</button>
+    </form>
+  </div>
+</header>
+
+<div class="admin-table-wrap">
+  <table class="admin-user-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>邮箱 / 昵称</th>
+        <th>邮箱状态</th>
+        <th>角色</th>
+        <th>余额</th>
+        <th>注册时间</th>
+        <th>充值/扣费</th>
+        <th>重置密码</th>
+        <th>角色修改</th>
+        <th>流水</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>#{{ user["id"] }}</td>
+        <td>
+          <strong>{{ user["email"] or user["username"] }}</strong>
+          <small>{{ user["username"] }}</small>
+        </td>
+        <td>
+          {% if user["role"] == "admin" and not user["email"] %}
+          <span class="verify-pill verified">内部账号</span>
+          {% elif user["email_verified"] %}
+          <span class="verify-pill verified">已验证</span>
+          {% else %}
+          <span class="verify-pill pending">待验证</span>
+          {% endif %}
+        </td>
+        <td><span class="role-pill role-{{ user['role'] }}">{{ user["role"] }}</span></td>
+        <td><span class="point-balance">{{ user["points"] }} 点</span></td>
+        <td><small>{{ user["created_at"] }}</small></td>
+        <td>
+          <form method="post" action="/admin/users/{{ user['id'] }}/adjust" class="table-action-form adjust">
+            <input name="delta" type="number" placeholder="+100 / -20" required>
+            <input name="admin_note" placeholder="备注">
+            <button type="submit">调整</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/admin/users/{{ user['id'] }}/password" class="table-action-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input name="password" type="password" minlength="6" placeholder="新密码" required>
+            <button type="submit">修改密码</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/admin/users/{{ user['id'] }}/role" class="table-action-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <select name="role">
+              <option value="user" {% if user["role"] == "user" %}selected{% endif %}>普通用户</option>
+              <option value="admin" {% if user["role"] == "admin" %}selected{% endif %}>管理员</option>
+            </select>
+            <button type="submit">保存角色</button>
+          </form>
+        </td>
+        <td><a class="table-link" href="/admin/users/{{ user['id'] }}/ledger">查看流水</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10">暂无用户。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

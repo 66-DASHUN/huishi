@@ -1,0 +1,45 @@
+{% extends "admin/layout.html" %}
+{% block title %}用户流水 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="page-hero">
+  <span>USER LEDGER</span>
+  <h1>用户流水</h1>
+  <p>{{ user["username"] }} 当前余额 {{ user["points"] }} 点。</p>
+</header>
+
+<form method="post" action="/admin/users/{{ user['id'] }}/adjust" class="admin-adjust-panel">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <strong>充值/扣费</strong>
+  <input name="delta" type="number" placeholder="正数充值，负数扣费" required>
+  <input name="admin_note" placeholder="备注">
+  <button type="submit">确认调整</button>
+</form>
+
+<h2>积分流水</h2>
+<div class="table-list">
+  {% for item in ledger %}
+  <div class="admin-row">
+    <strong>{{ item["reason"] }}</strong>
+    <span>{{ item["delta"] }} 点</span>
+    <span>{{ item["admin_note"] }}</span>
+    <span>{{ item["created_at"] }}</span>
+  </div>
+  {% else %}
+  <p>暂无积分流水。</p>
+  {% endfor %}
+</div>
+
+<h2>生成记录</h2>
+<div class="table-list">
+  {% for record in records %}
+  <div class="admin-row">
+    <strong>{{ record["prompt"] }}</strong>
+    <span>{{ record["resolution"] }}</span>
+    <span>{{ record["points_charged"] }} 点</span>
+    <span>{{ record["created_at"] }}</span>
+  </div>
+  {% else %}
+  <p>暂无生成记录。</p>
+  {% endfor %}
+</div>
+{% endblock %}

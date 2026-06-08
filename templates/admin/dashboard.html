@@ -1,0 +1,56 @@
+{% extends "admin/layout.html" %}
+{% block title %}管理总览 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="page-hero">
+  <span>ADMIN</span>
+  <h1>管理总览</h1>
+  <p>查看用户、积分、生成记录和最近流水，常用运营入口集中在这里。</p>
+</header>
+
+<section class="admin-stat-grid">
+  <article><span>用户总数</span><strong>{{ stats["user_count"] }}</strong></article>
+  <article><span>积分余额</span><strong>{{ stats["total_points"] }} 点</strong></article>
+  <article><span>生成记录</span><strong>{{ stats["record_count"] }}</strong></article>
+  <article><span>累计消耗</span><strong>{{ stats["points_charged"] }} 点</strong></article>
+</section>
+
+<section class="admin-actions">
+  <a href="/admin/users">用户充值/扣费</a>
+  <a href="/admin/pricing">计费设置</a>
+  <a href="/admin/packages">套餐管理</a>
+  <a href="/admin/records">记录流水</a>
+</section>
+
+<section class="admin-dashboard-grid">
+  <div>
+    <h2>最近生成</h2>
+    <div class="table-list">
+      {% for record in recent_records %}
+      <div class="admin-row compact-row">
+        <strong>{{ record["username"] }}</strong>
+        <span>{{ record["resolution"] }}</span>
+        <span>{{ record["points_charged"] }} 点</span>
+        <span>{{ record["prompt"] }}</span>
+      </div>
+      {% else %}
+      <p>暂无生成记录。</p>
+      {% endfor %}
+    </div>
+  </div>
+  <div>
+    <h2>最近积分流水</h2>
+    <div class="table-list">
+      {% for item in recent_ledger %}
+      <div class="admin-row compact-row">
+        <strong>{{ item["username"] }}</strong>
+        <span>{{ item["delta"] }} 点</span>
+        <span>{{ item["reason"] }}</span>
+        <span>{{ item["admin_note"] }}</span>
+      </div>
+      {% else %}
+      <p>暂无积分流水。</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

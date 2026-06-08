@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}邮箱验证 - 绘世{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-panel verify-panel">
+  <a class="auth-brand" href="/">绘世</a>
+  <h1>验证邮箱</h1>
+  <p class="auth-help">验证码已发送到 {{ user["email"] }}。请打开邮箱查看 6 位验证码，完成验证后即可生成图片。</p>
+  {% for message in get_flashed_messages() %}<p class="form-error">{{ message }}</p>{% endfor %}
+  <form method="post" class="auth-form">
+    <label><span>验证码</span><input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="输入 6 位验证码" required></label>
+    <button type="submit">完成验证</button>
+  </form>
+  <p class="auth-switch"><a href="/workspace">稍后验证</a></p>
+</main>
+{% endblock %}

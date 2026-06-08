@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.pytest-tmp*/
+.chrome-audit/
+.codex-screenshots/
+.superpowers/
+node_modules/
+data/
+dist/
+screenshots/
+static/uploads/*
+!static/uploads/.gitkeep
+*.pyc
+*.log
+*.err
+*.out
+*.tsbuildinfo
+*.bak
+src/styles_*.css
+err*.txt
+test_results*.txt
+ChatGPT Image *.png
+购物 - GPT专卖-cw.html
+购物 - GPT专卖-cw_files/
