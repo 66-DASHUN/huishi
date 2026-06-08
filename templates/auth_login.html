@@ -5,7 +5,7 @@
 <main class="auth-panel">
   <a class="auth-brand" href="/">绘世</a>
   <h1>登录</h1>
-  <p class="auth-help">进入工作台、资产库和积分账户。</p>
+  <p class="auth-help">登录后留在首页，你可以再选择进入工作台或充值。</p>
   {% for message in get_flashed_messages() %}<p class="form-error">{{ message }}</p>{% endfor %}
   <form method="post" class="auth-form">
     <label><span>账号</span><input name="email" placeholder="邮箱或管理员账号" autocomplete="username" required></label>

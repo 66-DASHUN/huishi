@@ -111,6 +111,24 @@ def test_register_respects_safe_next_destination(client):
     assert response.headers["Location"].endswith("/workspace")
 
 
+def test_full_login_page_copy_matches_homepage_return_flow(client):
+    response = client.get("/login?next=/")
+    text = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "登录后留在首页" in text
+    assert "进入工作台、资产库和积分账户" not in text
+
+
+def test_full_register_page_copy_matches_homepage_return_flow(client):
+    response = client.get("/register?next=/")
+    text = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "注册后返回首页" in text
+    assert "自动进入工作台" not in text
+
+
 def test_register_next_does_not_redirect_to_external_site(client):
     response = client.post(
         "/register?next=https://evil.example/phish",
