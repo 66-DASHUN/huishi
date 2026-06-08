@@ -480,6 +480,23 @@ def test_workspace_uses_material_stack_not_reference_upload_copy(client):
     assert "图生图" not in text
 
 
+def test_reference_material_entry_lives_inside_prompt_shell_not_control_row(client):
+    client.post("/register", data={"username": "reference-entry-position", "password": "secret123"}, follow_redirects=True)
+
+    response = client.get("/workspace")
+    text = response.get_data(as_text=True)
+    prompt_shell_start = text.index('class="composer-prompt-shell"')
+    prompt_shell_end = text.index('<input type="hidden" name="csrf_token"', prompt_shell_start)
+    prompt_shell_markup = text[prompt_shell_start:prompt_shell_end]
+    controls_start = text.index('class="composer-controls"')
+    controls_end = text.index('<div class="parameter-popover"', controls_start)
+    controls_markup = text[controls_start:controls_end]
+
+    assert 'data-reference-stack' in prompt_shell_markup
+    assert 'data-reference-add' in prompt_shell_markup
+    assert 'data-reference-stack' not in controls_markup
+
+
 def test_workspace_rendered_images_are_draggable_reference_sources(client, app):
     from huishi.db import get_db, utc_now
 
@@ -617,6 +634,20 @@ def test_reference_material_stack_uses_compact_overlapping_cards():
     assert "height: 26px" in material_add_rule
 
 
+def test_reference_material_stack_is_anchored_inside_prompt_area():
+    from pathlib import Path
+    import re
+
+    stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
+    prompt_rule = re.search(r"^\.composer-prompt \{([^}]*)\}", stylesheet, re.MULTILINE).group(1)
+    stack_rule = re.search(r"^\.reference-material-stack \{([^}]*)\}", stylesheet, re.MULTILINE).group(1)
+
+    assert "padding: 8px 80px 8px 76px" in prompt_rule
+    assert "position: absolute" in stack_rule
+    assert "left: 12px" in stack_rule
+    assert "top: 12px" in stack_rule
+
+
 def test_reference_material_remove_control_is_not_nested_in_tile_button():
     from pathlib import Path
 
@@ -693,7 +724,8 @@ def test_mobile_material_stack_keeps_same_compact_anchor():
     stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
     mobile_section = stylesheet[stylesheet.index("@media (max-width: 760px)") :]
 
-    assert ".reference-material-stack { width: 64px; min-width: 64px; grid-column: auto; }" in mobile_section
+    assert ".composer-prompt { min-height: 100px; resize: none; padding: 16px 72px 34px 76px;" in mobile_section
+    assert ".reference-material-stack { width: 64px; min-width: 64px; }" in mobile_section
     assert ".reference-material-stack:hover { width: 64px; }" in mobile_section
 
 

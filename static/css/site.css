@@ -653,7 +653,7 @@ button, input, select { font: inherit; }
 :root[data-workspace-theme="dark"] .composer.is-empty-card { background: var(--studio-floating); }
 .composer.is-empty-card .composer-prompt { min-height: 80px; resize: none; overflow-y: auto; border-color: var(--studio-border); background: var(--studio-surface); font-size: 14px; }
 .composer-prompt-shell { position: relative; min-width: 0; }
-.composer-prompt { display: block; width: 100%; min-width: 0; min-height: 60px; max-height: 200px; resize: none; overflow-y: auto; padding: 8px 80px 8px 12px; border: 1px solid var(--studio-border); border-radius: 12px; background: var(--studio-surface); color: var(--studio-text); outline: 0; font-size: 14px; line-height: 1.6; transition: height .12s ease, border-color .16s ease, box-shadow .16s ease; }
+.composer-prompt { display: block; width: 100%; min-width: 0; min-height: 60px; max-height: 200px; resize: none; overflow-y: auto; padding: 8px 80px 8px 76px; border: 1px solid var(--studio-border); border-radius: 12px; background: var(--studio-surface); color: var(--studio-text); outline: 0; font-size: 14px; line-height: 1.6; transition: height .12s ease, border-color .16s ease, box-shadow .16s ease; }
 .composer-prompt:focus { border-color: rgba(0,200,215,.48); box-shadow: 0 0 0 3px rgba(0,200,215,.1); }
 .composer.is-dragging-reference .composer-prompt { border-color: rgba(0,169,199,.56); box-shadow: 0 0 0 3px rgba(0,169,199,.12); }
 .composer.has-reference .composer-prompt { border-color: color-mix(in srgb, var(--studio-primary-text) 28%, var(--studio-border)); }
@@ -670,7 +670,9 @@ button, input, select { font: inherit; }
 .reference-input { display: none; }
 .reference-input[hidden] { display: none; }
 .reference-material-stack {
-  position: relative;
+  position: absolute;
+  left: 12px;
+  top: 12px;
   width: 64px;
   min-width: 64px;
   height: 64px;
@@ -1517,7 +1519,7 @@ button, input, select { font: inherit; }
   .output-composer.is-collapsed { left: 14px; right: 14px; width: auto; grid-template-columns: minmax(0, 1fr) 132px; }
   .composer.is-empty-card { top: auto; left: 14px; right: 14px; bottom: 14px; transform: none; width: auto; }
   .empty-creation-stage { min-height: 360px; padding-bottom: 140px; }
-  .composer-prompt { min-height: 100px; resize: none; padding: 16px 72px 34px 14px; font-size: 15px; line-height: 1.6; }
+  .composer-prompt { min-height: 100px; resize: none; padding: 16px 72px 34px 76px; font-size: 15px; line-height: 1.6; }
   .prompt-meta { right: 12px; bottom: 10px; gap: 8px; font-size: 12px; }
   .prompt-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .prompt-tools select, .prompt-tools button { min-width: 0; width: 100%; font-size: 12px; }
@@ -1525,7 +1527,7 @@ button, input, select { font: inherit; }
   .output-composer.is-collapsed .composer-controls { display: flex; grid-column: 2; }
   .parameter-trigger, .dimension-inline, .count-stepper, .composer-meter, .optimize-button, .generate-button { min-height: 42px; font-size: 12px; }
   .composer-meter, .optimize-button, .generate-button { grid-column: 1 / -1; }
-  .reference-material-stack { width: 64px; min-width: 64px; grid-column: auto; }
+  .reference-material-stack { width: 64px; min-width: 64px; }
   .reference-material-stack:hover { width: 64px; }
   .reference-material-stack.is-expanded { width: min(260px, 64vw); }
   .reference-material-stack:hover .reference-material-list { position: absolute; min-width: 64px; }

@@ -84,6 +84,10 @@
           <span data-prompt-counter>0 / 1000</span>
           <button type="button" data-expand-prompt aria-label="展开提示词输入框">↗</button>
         </div>
+        <div class="reference-material-stack is-empty" id="reference-material-stack" data-reference-stack>
+          <button type="button" class="reference-add-card" data-reference-add aria-label="添加素材">+</button>
+          <div class="reference-material-list" id="reference-preview" data-reference-list aria-label="参考素材"></div>
+        </div>
       </div>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="mode" id="mode" value="{{ edit_seed.mode if edit_seed else 'text' }}">
@@ -97,10 +101,6 @@
       <input type="hidden" name="reference_paths" id="reference-paths" value="">
 
       <div class="composer-controls">
-        <div class="reference-material-stack is-empty" id="reference-material-stack" data-reference-stack>
-          <button type="button" class="reference-add-card" data-reference-add aria-label="添加素材">+</button>
-          <div class="reference-material-list" id="reference-preview" data-reference-list aria-label="参考素材"></div>
-        </div>
         <button type="button" class="parameter-trigger ratio-trigger" data-panel-trigger="ratio-panel" aria-controls="ratio-panel" aria-expanded="false" title="画面比例"><span aria-hidden="true">⌗</span><strong id="ratio-label">16:9</strong><small aria-hidden="true">⌄</small></button>
         <div class="dimension-inline" aria-label="自定义尺寸">
           <input type="number" id="custom-width" class="custom-dim-input" min="64" max="8192" value="2560" placeholder="宽" aria-label="自定义宽度">
