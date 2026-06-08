@@ -260,6 +260,7 @@ function renderReferenceMaterials() {
   const hasReference = Boolean(referenceMaterials.length);
   referenceStack?.classList.toggle("has-materials", hasReference);
   referenceStack?.classList.toggle("is-empty", !hasReference);
+  if (!hasReference) referenceStack?.classList.remove("is-expanded");
   referencePreview?.classList.toggle("is-visible", hasReference);
   referenceField?.classList.toggle("is-visible", hasReference);
   if (referenceClearButton) referenceClearButton.hidden = !hasReference;

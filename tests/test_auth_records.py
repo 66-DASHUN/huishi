@@ -642,6 +642,20 @@ def test_reference_material_keyboard_preview_does_not_intercept_remove_button():
     assert 'if (event.target.closest(".reference-remove")) return;' in keydown_handler
 
 
+def test_reference_material_stack_collapses_when_empty():
+    from pathlib import Path
+    import re
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+    render_function = re.search(
+        r"function renderReferenceMaterials\(\) \{(?P<body>[\s\S]*?)\n\}",
+        script,
+    ).group("body")
+
+    assert "hasReference" in render_function
+    assert 'referenceStack?.classList.remove("is-expanded")' in render_function
+
+
 def test_reference_material_remove_button_resets_native_button_chrome():
     from pathlib import Path
     import re
