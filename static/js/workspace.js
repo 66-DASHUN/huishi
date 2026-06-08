@@ -153,11 +153,18 @@ function applySeedToComposer(seed) {
   if (qualityInput) qualityInput.value = seed.quality || "auto";
   if (outputFormatInput) outputFormatInput.value = seed.output_format || "png";
   if (countInput) countInput.value = seed.count || 1;
+  if (seed.actual_size && /^\d+x\d+$/.test(seed.actual_size)) {
+    const [seedWidth, seedHeight] = seed.actual_size.split("x");
+    if (customWidthInput) customWidthInput.value = seedWidth;
+    if (customHeightInput) customHeightInput.value = seedHeight;
+    if (widthInput) widthInput.value = seedWidth;
+    if (heightInput) heightInput.value = seedHeight;
+  }
   clearReferenceImages();
   (seed.reference_paths || []).forEach((path) => addReferencePath(path));
   syncModeButtons();
   syncReferenceField();
-  syncSizeDisplay();
+  if (!seed.actual_size) syncSizeDisplay();
   refreshEstimate();
   autosizePrompt();
 }
@@ -580,14 +587,14 @@ function renderCurrentRecord(record) {
       </div>
       <div class="creation-toolbar">
         <div class="creation-action-group">
-          <button type="button" data-refill-record data-prompt="" data-mode="${record.mode}" data-ratio="${record.ratio}">重新编辑</button>
-          <button type="button" data-regenerate-record data-prompt="" data-mode="${record.mode}" data-ratio="${record.ratio}">再次生成</button>
+          <button type="button" data-refill-record data-prompt="" data-mode="${record.mode}" data-ratio="${record.ratio}" data-actual-size="${record.actual_size || ""}">重新编辑</button>
+          <button type="button" data-regenerate-record data-prompt="" data-mode="${record.mode}" data-ratio="${record.ratio}" data-actual-size="${record.actual_size || ""}">再次生成</button>
           <a href="/assets/${record.id}?from=workspace" data-detail-link>查看参数</a>
         </div>
         <footer class="creation-meta" id="current-meta" aria-label="生成参数">
           <span>${record.ratio || ratioInput?.value || "16:9"}</span>
-          <span>${record.actual_size || record.resolution}</span>
-          <span>${record.points_charged} pts</span>
+          <span>${record.actual_size || ""}</span>
+          <span>${record.points_charged} 点</span>
         </footer>
       </div>
   `;
@@ -632,6 +639,7 @@ function renderTaskCard(formData) {
   card.dataset.cost = cost;
   clone.querySelector("[data-task-prompt]").textContent = String(prompt).slice(0, 80);
   const sizeText = customWidthInput?.value && customHeightInput?.value ? `${customWidthInput.value}x${customHeightInput.value}` : "";
+  card.dataset.actualSize = sizeText;
   clone.querySelector("[data-task-params]").textContent = [ratio, sizeText].filter(Boolean).join(" · ");
   const skeletonCount = Math.max(1, Math.min(Number.parseInt(String(count), 10) || 1, 4));
   const skeletonGrid = clone.querySelector("[data-task-skeletons]");
@@ -664,7 +672,7 @@ function markTaskFailed(card, message) {
   `;
   card.querySelector(".task-error-message").textContent = simplifyGenerationError(message);
   card.querySelector("[data-task-failure-prompt]").textContent = card.dataset.prompt || "-";
-  card.querySelector("[data-task-failure-params]").textContent = `${modeText(card.dataset.mode)} · ${card.dataset.ratio || "-"} · ${card.dataset.resolution || "-"} · ${card.dataset.count || "1"} 张`;
+  card.querySelector("[data-task-failure-params]").textContent = `${modeText(card.dataset.mode)} · ${card.dataset.ratio || "-"} · ${card.dataset.actualSize || "-"} · ${card.dataset.count || "1"} 张`;
   card.querySelector("[data-task-failure-cost]").textContent = card.dataset.cost || "-";
   card.querySelector("[data-task-retry]")?.addEventListener("click", () => form?.requestSubmit());
   card.querySelector("[data-task-edit]")?.addEventListener("click", () => {
@@ -747,9 +755,16 @@ function applyRecordToComposer(button, submitImmediately = false) {
   if (modeInput && button.dataset.mode) modeInput.value = button.dataset.mode;
   // Restore ratio from record, syncSizeDisplay will fill width/height from SIZE_MATRIX
   if (ratioInput && button.dataset.ratio) ratioInput.value = button.dataset.ratio;
+  if (button.dataset.actualSize && /^\d+x\d+$/.test(button.dataset.actualSize)) {
+    const [recordWidth, recordHeight] = button.dataset.actualSize.split("x");
+    if (customWidthInput) customWidthInput.value = recordWidth;
+    if (customHeightInput) customHeightInput.value = recordHeight;
+    if (widthInput) widthInput.value = recordWidth;
+    if (heightInput) heightInput.value = recordHeight;
+  }
   syncModeButtons();
   syncReferenceField();
-  syncSizeDisplay();
+  if (!button.dataset.actualSize) syncSizeDisplay();
   refreshEstimate();
   form.scrollIntoView({ behavior: "smooth", block: "center" });
   form.querySelector('[name="prompt"]')?.focus();

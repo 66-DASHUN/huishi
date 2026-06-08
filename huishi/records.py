@@ -203,6 +203,7 @@ def record_generation_seed(record) -> dict[str, object]:
         "mode": record["mode"],
         "ratio": record["ratio"] or infer_ratio_from_size(record["actual_size"]),
         "resolution": record["resolution"],
+        "actual_size": record["actual_size"],
         "quality": record["quality"],
         "output_format": record["output_format"],
         "count": record["count"],

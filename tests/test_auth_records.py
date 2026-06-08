@@ -390,9 +390,10 @@ def test_workspace_result_toolbar_places_meta_on_action_row(client, app):
     assert "creation-action-group" in text
     assert "creation-meta" in text
     assert "<span>9:16</span>" in text
-    assert "<span>2K</span>" in text
+    assert "<span>2K</span>" not in text
     assert "<span>1440x2560</span>" in text
-    assert "<span>2 pts</span>" in text
+    assert "<span>2 点</span>" in text
+    assert "<span>2 pts</span>" not in text
     assert "图片生成</span>" not in text
     assert text.index("creation-action-group") < text.index("creation-meta")
 
@@ -968,6 +969,12 @@ def test_assets_page_renders_image_only_asset_library(client, app):
     assert "鈱" not in text
     assert "超清" not in text
     assert 'data-asset-filter="2K"' not in text
+    assert "data-filter-resolution" not in text
+    assert ">1K<" not in text
+    assert ">2K<" not in text
+    assert ">4K<" not in text
+    assert "1440x2560" in text
+    assert " · 2K" not in text
     assert "视频" not in text
     assert "音频" not in text
     assert "文档" not in text
@@ -1020,6 +1027,7 @@ def test_assets_page_contains_filter_drawer_and_batch_controls(client):
     assert 'aria-expanded="false"' in text
     assert "data-filter-mode" in text
     assert "data-filter-ratio" in text
+    assert "data-filter-resolution" not in text
     assert "data-batch-toggle" in text
     assert 'aria-pressed="false"' in text
     assert "data-bulk-download" in text
@@ -1089,6 +1097,7 @@ def test_workspace_edit_record_prefills_original_prompt_and_parameters(client, a
     assert '"mode": "reference"' in text
     assert '"ratio": "3:2"' in text
     assert '"resolution": "2K"' in text
+    assert '"actual_size": "2160x1440"' in text
     assert '"quality": "high"' in text
     assert '"output_format": "webp"' in text
     assert '"count": 2' in text
@@ -1103,6 +1112,40 @@ def test_workspace_edit_record_prefills_original_prompt_and_parameters(client, a
     assert 'name="quality" id="quality" value="high"' in text
     assert 'name="output_format" id="output-format" value="webp"' in text
     assert 'name="count" type="number" min="1" max="8" value="2"' in text
+
+
+def test_workspace_edit_seed_restores_actual_custom_size():
+    from pathlib import Path
+    import re
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+    seed_function = re.search(
+        r"function applySeedToComposer\(seed\) \{(?P<body>[\s\S]*?)\n\}",
+        script,
+    ).group("body")
+
+    assert "seed.actual_size" in seed_function
+    assert "customWidthInput" in seed_function
+    assert "customHeightInput" in seed_function
+
+
+def test_workspace_record_actions_restore_actual_size_without_resolution_dataset():
+    from pathlib import Path
+    import re
+
+    template = Path("templates/workspace.html").read_text(encoding="utf-8")
+    assert "data-resolution=" not in template
+    assert 'data-actual-size="{{ record[\'actual_size\'] }}"' in template
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+    action_function = re.search(
+        r"function applyRecordToComposer\(button, submitImmediately = false\) \{(?P<body>[\s\S]*?)\n\}",
+        script,
+    ).group("body")
+    assert "button.dataset.actualSize" in action_function
+    assert "customWidthInput" in action_function
+    assert "customHeightInput" in action_function
+    assert "button.dataset.resolution" not in action_function
 
 
 def test_workspace_edit_record_rejects_invalid_or_unowned_record(client, app):
@@ -1435,7 +1478,7 @@ def test_asset_detail_uses_asset_route_and_full_metadata(client, app):
     assert response.status_code == 200
     assert "asset detail prompt" in text
     assert "1:1" in text
-    assert "2K" in text
+    assert "2K" not in text
     assert "2048x2048" in text
     assert "png" in text
     assert "1.2" in text

@@ -76,7 +76,6 @@ function applyAssetFilters(filter = document.querySelector("[data-asset-filter].
   const query = (assetSearch?.value || "").trim().toLowerCase();
   const mode = document.querySelector("[data-filter-mode]")?.value || "";
   const ratio = document.querySelector("[data-filter-ratio]")?.value || "";
-  const resolution = document.querySelector("[data-filter-resolution]")?.value || "";
   const time = document.querySelector("[data-filter-time]")?.value || "";
   let visibleCount = 0;
   assetTiles.forEach((tile) => {
@@ -85,8 +84,7 @@ function applyAssetFilters(filter = document.querySelector("[data-asset-filter].
     const matchesQuick = filter === "all" || (filter === "favorite" && tile.dataset.favorite === "1");
     const matchesMode = !mode || tile.dataset.mode === mode;
     const matchesRatio = !ratio || tile.dataset.ratio === ratio;
-    const matchesResolution = !resolution || tile.dataset.resolution === resolution;
-    const isVisible = matchesSearch && matchesQuick && matchesMode && matchesRatio && matchesResolution && matchesTime(tile, time);
+    const isVisible = matchesSearch && matchesQuick && matchesMode && matchesRatio && matchesTime(tile, time);
     tile.classList.toggle("is-hidden", !isVisible);
     if (isVisible) visibleCount += 1;
   });

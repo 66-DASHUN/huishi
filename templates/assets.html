@@ -49,14 +49,6 @@
           <option>2:3</option>
         </select>
       </label>
-      <label>清晰度
-        <select data-filter-resolution>
-          <option value="">全部</option>
-          <option>1K</option>
-          <option>2K</option>
-          <option>4K</option>
-        </select>
-      </label>
       <div class="filter-actions">
         <button type="button" data-filter-reset>重置</button>
         <button type="button" data-filter-apply>应用</button>
@@ -75,7 +67,7 @@
     <section class="asset-date-group">
       <div class="asset-grid asset-library">
         {% for record in records %}
-        <article class="asset-tile" data-prompt="{{ record['prompt'] }}" data-resolution="{{ record['resolution'] }}" data-favorite="{{ record['favorite'] }}" data-mode="{{ record['mode'] }}" data-ratio="{{ record['ratio'] }}" data-created-at="{{ record['created_at'] }}">
+        <article class="asset-tile" data-prompt="{{ record['prompt'] }}" data-favorite="{{ record['favorite'] }}" data-mode="{{ record['mode'] }}" data-ratio="{{ record['ratio'] }}" data-created-at="{{ record['created_at'] }}">
           <label class="asset-select-wrap">
             <input class="asset-select" type="checkbox" value="{{ record['id'] }}" aria-label="选择资产">
           </label>
@@ -84,7 +76,7 @@
           </a>
           <div class="asset-card-body">
             <strong title="{{ record['prompt'] }}">{{ record["prompt"] }}</strong>
-            <span>{{ "文生图" if record["mode"] == "text" else "参考图" }} · {{ record["ratio"] }} · {{ record["resolution"] }}</span>
+            <span>{{ "文生图" if record["mode"] == "text" else "参考图" }} · {{ record["ratio"] }} · {{ record["actual_size"] }}</span>
           </div>
           <div class="asset-tile-actions">
             <a href="/assets/{{ record['id'] }}?from=assets" data-detail-link>查看详情</a>

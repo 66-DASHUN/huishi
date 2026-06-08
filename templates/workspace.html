@@ -47,15 +47,14 @@
         </div>
         <div class="creation-toolbar">
           <div class="creation-action-group">
-            <button type="button" data-refill-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-resolution="{{ record['resolution'] }}">重新编辑</button>
-            <button type="button" data-regenerate-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-resolution="{{ record['resolution'] }}">再次生成</button>
+            <button type="button" data-refill-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-ratio="{{ record['ratio'] }}" data-actual-size="{{ record['actual_size'] }}">重新编辑</button>
+            <button type="button" data-regenerate-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-ratio="{{ record['ratio'] }}" data-actual-size="{{ record['actual_size'] }}">再次生成</button>
             <a href="/assets/{{ record['id'] }}?from=workspace" data-detail-link>查看参数</a>
           </div>
           <footer class="creation-meta" {% if loop.last %}id="current-meta"{% endif %} aria-label="生成参数">
             <span>{{ record["ratio"] }}</span>
-            <span>{{ record["resolution"] }}</span>
             <span>{{ record["actual_size"] }}</span>
-            <span>{{ record["points_charged"] }} pts</span>
+            <span>{{ record["points_charged"] }} 点</span>
           </footer>
         </div>
       </article>
