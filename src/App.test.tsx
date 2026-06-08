@@ -34,6 +34,8 @@ describe("landing page", () => {
 
     expect(screen.getByRole("dialog", { name: "登录绘世" })).toBeInTheDocument();
     expect(screen.getByRole("form", { name: "登录绘世" })).toHaveAttribute("action", "/login?next=/");
+    expect(screen.getByText("登录后留在首页，你可以再选择进入工作台或充值。")).toBeInTheDocument();
+    expect(screen.queryByText("登录后进入工作台，继续生成和管理资产。")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "打开完整登录页面" })).toHaveAttribute(
       "href",
       "/login?next=/",
@@ -52,6 +54,8 @@ describe("landing page", () => {
       "action",
       "/register?next=/",
     );
+    expect(screen.getByText("创建账号后返回首页，并获得 20 点注册赠送。")).toBeInTheDocument();
+    expect(screen.queryByText("创建账号后自动进入工作台，并获得 20 点注册赠送。")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "打开完整注册页面" })).toHaveAttribute(
       "href",
       "/register?next=/",

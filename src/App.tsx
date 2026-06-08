@@ -249,8 +249,8 @@ function AuthModal({
           <h2>{title}</h2>
           <p>
             {isLogin
-              ? "登录后进入工作台，继续生成和管理资产。"
-              : "创建账号后自动进入工作台，并获得 20 点注册赠送。"}
+              ? "登录后留在首页，你可以再选择进入工作台或充值。"
+              : "创建账号后返回首页，并获得 20 点注册赠送。"}
           </p>
         </div>
         <div className="auth-tabs" role="tablist" aria-label="登录注册切换">
