@@ -232,11 +232,12 @@ function renderReferenceMaterials() {
   if (referencePreview) {
     referencePreview.innerHTML = "";
     referenceMaterials.forEach((item) => {
-      const tile = document.createElement("button");
-      tile.type = "button";
+      const tile = document.createElement("div");
       tile.className = "reference-material-tile";
       tile.dataset.referenceId = item.id;
       tile.draggable = true;
+      tile.setAttribute("role", "button");
+      tile.tabIndex = 0;
       if (item.path) tile.dataset.referencePath = item.path;
       tile.setAttribute("aria-label", `预览参考图：${materialDisplayName(item)}`);
 
@@ -246,9 +247,9 @@ function renderReferenceMaterials() {
       image.loading = "lazy";
       tile.appendChild(image);
 
-      const remove = document.createElement("span");
+      const remove = document.createElement("button");
+      remove.type = "button";
       remove.className = "reference-remove";
-      remove.setAttribute("role", "button");
       remove.setAttribute("aria-label", `移除参考图：${materialDisplayName(item)}`);
       remove.textContent = "×";
       tile.appendChild(remove);
@@ -990,6 +991,18 @@ function bindReferenceStack() {
       return;
     }
     const item = referenceMaterials.find((material) => material.id === id);
+    if (item) openReferencePreview(item);
+  });
+  referencePreview?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const tile = event.target.closest(".reference-material-tile");
+    if (!tile) return;
+    event.preventDefault();
+    if (!isReferenceStackExpanded()) {
+      referenceStack?.classList.add("is-expanded");
+      return;
+    }
+    const item = referenceMaterials.find((material) => material.id === tile.dataset.referenceId);
     if (item) openReferencePreview(item);
   });
   referencePreview?.addEventListener("dragstart", (event) => {

@@ -617,6 +617,29 @@ def test_reference_material_stack_uses_compact_overlapping_cards():
     assert "height: 26px" in material_add_rule
 
 
+def test_reference_material_remove_control_is_not_nested_in_tile_button():
+    from pathlib import Path
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    assert 'document.createElement("button")' in script
+    assert 'const tile = document.createElement("button")' not in script
+    assert 'const remove = document.createElement("button")' in script
+    assert 'remove.setAttribute("role", "button")' not in script
+
+
+def test_reference_material_remove_button_resets_native_button_chrome():
+    from pathlib import Path
+    import re
+
+    stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
+    remove_rule = re.search(r"^\.reference-remove \{([^}]*)\}", stylesheet, re.MULTILINE).group(1)
+
+    assert "border: 0" in remove_rule
+    assert "padding: 0" in remove_rule
+    assert "cursor: pointer" in remove_rule
+
+
 def test_custom_dimension_inputs_have_room_for_four_digit_sizes():
     from pathlib import Path
     import re
