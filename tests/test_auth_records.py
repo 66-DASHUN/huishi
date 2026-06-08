@@ -529,6 +529,48 @@ def test_workspace_contains_prompt_optimization_controls(client):
     assert "prompt-optimize-modal" not in text
 
 
+def test_workspace_composer_controls_can_wrap_before_overlapping():
+    from pathlib import Path
+    import re
+
+    stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
+    desktop_controls = re.search(r"^\.composer-controls \{([^}]*)\}", stylesheet, re.MULTILINE).group(1)
+
+    assert "flex-wrap: wrap" in desktop_controls
+    assert "grid-template-columns: auto auto auto auto auto minmax(130px, 1fr) 148px" not in desktop_controls
+    assert re.search(r"\.workspace-page \.composer \.optimize-button \{[^}]*flex: 0 1 132px", stylesheet)
+    assert ".dimension-inline .custom-dim-input" in stylesheet
+
+
+def test_reference_material_stack_expands_without_reflowing_controls():
+    from pathlib import Path
+    import re
+
+    stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
+    expanded_stack = re.search(
+        r"^\.reference-material-stack:hover,\n\.reference-material-stack\.is-expanded \{([^}]*)\}",
+        stylesheet,
+        re.MULTILINE,
+    ).group(1)
+    expanded_list = re.search(
+        r"^\.reference-material-stack:hover \.reference-material-list,\n"
+        r"\.reference-material-stack\.is-expanded \.reference-material-list \{([^}]*)\}",
+        stylesheet,
+        re.MULTILINE,
+    ).group(1)
+    expanded_tiles = re.search(
+        r"^\.reference-material-stack:hover \.reference-material-tile,\n"
+        r"\.reference-material-stack\.is-expanded \.reference-material-tile \{([^}]*)\}",
+        stylesheet,
+        re.MULTILINE,
+    ).group(1)
+
+    assert "width: 72px" in expanded_stack
+    assert "width: min(292px, 42vw)" not in expanded_stack
+    assert "position: absolute" in expanded_list
+    assert "position: relative" not in expanded_tiles
+
+
 def test_workspace_contains_generation_task_region(client):
     client.post("/register", data={"username": "taskregion", "password": "secret123"}, follow_redirects=True)
 
