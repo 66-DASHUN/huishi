@@ -102,7 +102,7 @@ def register():
                     session["pending_email_user_id"] = cursor.lastrowid
                     return redirect(url_for("auth.verify_email"))
                 return redirect(safe_next_url(request.args.get("next")))
-    return render_template("auth_register.html")
+    return render_template("auth_register.html", next_url=safe_next_url(request.args.get("next")))
 
 
 @bp.route("/login", methods=("GET", "POST"))
@@ -117,7 +117,7 @@ def login():
             session.clear()
             session["user_id"] = user["id"]
             return redirect(safe_next_url(request.args.get("next")))
-    return render_template("auth_login.html")
+    return render_template("auth_login.html", next_url=safe_next_url(request.args.get("next")))
 
 
 @bp.route("/verify-email", methods=("GET", "POST"))

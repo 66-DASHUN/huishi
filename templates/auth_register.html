@@ -13,6 +13,6 @@
     <label><span>密码</span><input name="password" placeholder="至少 6 位" type="password" autocomplete="new-password" minlength="6" required></label>
     <button type="submit">注册并领取 20 点</button>
   </form>
-  <p class="auth-switch">已有账号？<a href="/login">去登录</a></p>
+  <p class="auth-switch">已有账号？<a href="{{ url_for('auth.login', next=next_url) }}">去登录</a></p>
 </main>
 {% endblock %}

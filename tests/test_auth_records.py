@@ -118,6 +118,7 @@ def test_full_login_page_copy_matches_homepage_return_flow(client):
     assert response.status_code == 200
     assert "登录后留在首页" in text
     assert "进入工作台、资产库和积分账户" not in text
+    assert 'href="/register?next=/"' in text
 
 
 def test_full_register_page_copy_matches_homepage_return_flow(client):
@@ -127,6 +128,7 @@ def test_full_register_page_copy_matches_homepage_return_flow(client):
     assert response.status_code == 200
     assert "注册后返回首页" in text
     assert "自动进入工作台" not in text
+    assert 'href="/login?next=/"' in text
 
 
 def test_register_next_does_not_redirect_to_external_site(client):
