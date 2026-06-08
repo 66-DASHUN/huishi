@@ -12,6 +12,19 @@ def test_billing_tier_uses_longest_edge(app):
     assert tier_for_size("3840x2160") == "4K"
 
 
+def test_billing_tier_boundaries_use_confirmed_longest_edge_ranges(app):
+    from huishi.billing import tier_for_size
+
+    assert tier_for_size("1560x900") == "1K"
+    assert tier_for_size("1561x900") == "2K"
+    assert tier_for_size("2440x1600") == "2K"
+    assert tier_for_size("2441x1600") == "4K"
+    assert tier_for_size("4280x2400") == "4K"
+
+    with pytest.raises(ValueError, match="分辨率"):
+        tier_for_size("4281x2400")
+
+
 def test_reference_and_text_custom_size_share_price(app):
     from huishi import billing
 
