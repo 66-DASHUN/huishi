@@ -628,6 +628,20 @@ def test_reference_material_remove_control_is_not_nested_in_tile_button():
     assert 'remove.setAttribute("role", "button")' not in script
 
 
+def test_reference_material_keyboard_preview_does_not_intercept_remove_button():
+    from pathlib import Path
+    import re
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+    keydown_handler = re.search(
+        r'referencePreview\?\.addEventListener\("keydown", \(event\) => \{(?P<body>[\s\S]*?)\n  \}\);',
+        script,
+    ).group("body")
+
+    assert 'event.target.closest(".reference-remove")' in keydown_handler
+    assert 'if (event.target.closest(".reference-remove")) return;' in keydown_handler
+
+
 def test_reference_material_remove_button_resets_native_button_chrome():
     from pathlib import Path
     import re

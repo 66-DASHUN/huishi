@@ -995,6 +995,7 @@ function bindReferenceStack() {
   });
   referencePreview?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
+    if (event.target.closest(".reference-remove")) return;
     const tile = event.target.closest(".reference-material-tile");
     if (!tile) return;
     event.preventDefault();
