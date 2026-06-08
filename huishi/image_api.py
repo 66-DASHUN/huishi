@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import html
+import logging
 import mimetypes
 import os
 import re
@@ -12,8 +13,67 @@ from pathlib import Path
 from typing import Any
 
 from flask import current_app
+from openai import APIError as OpenAIError
+from openai import APIConnectionError, APITimeoutError
 from openai import OpenAI
 from werkzeug.datastructures import FileStorage
+
+logger = logging.getLogger(__name__)
+
+# Configuration defaults
+DEFAULT_REQUEST_TIMEOUT = 30  # seconds
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_BACKOFF = 1.5  # exponential backoff multiplier
+
+
+def _get_retry_config() -> dict[str, Any]:
+    """Get retry configuration from app settings."""
+    return {
+        "timeout": float(current_app.config.get("REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT)),
+        "max_retries": int(current_app.config.get("MAX_RETRIES", DEFAULT_MAX_RETRIES)),
+        "backoff_factor": float(current_app.config.get("RETRY_BACKOFF", DEFAULT_RETRY_BACKOFF)),
+    }
+
+
+def _retry_with_backoff(fn, *args, max_retries: int = 3, backoff_factor: float = 1.5, timeout: float = 30, **kwargs):
+    """
+    Execute function with exponential backoff retry on timeout/connection errors.
+
+    Args:
+        fn: Callable to execute
+        max_retries: Maximum number of retry attempts
+        backoff_factor: Multiplier for backoff time
+        timeout: Request timeout in seconds
+        *args, **kwargs: Arguments to pass to fn
+
+    Returns:
+        Result from successful function call
+
+    Raises:
+        Last exception if all retries exhausted
+    """
+    last_exception = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            logger.debug(f"Attempting API call (attempt {attempt + 1}/{max_retries + 1})")
+            return fn(*args, timeout=timeout, **kwargs)
+        except (APITimeoutError, APIConnectionError, TimeoutError) as exc:
+            last_exception = exc
+            if attempt < max_retries:
+                wait_time = (backoff_factor ** attempt)
+                logger.warning(
+                    f"API call timeout/connection error, retrying in {wait_time:.1f}s",
+                    extra={"attempt": attempt + 1, "max_retries": max_retries, "wait_time": wait_time},
+                )
+                time.sleep(wait_time)
+            else:
+                logger.error(
+                    f"API call failed after {max_retries + 1} attempts",
+                    extra={"attempt": attempt + 1, "error": str(exc)},
+                )
+    
+    raise last_exception or RuntimeError("Unknown retry error")
 
 
 SIZE_MATRIX = {
@@ -161,6 +221,9 @@ def generate_image(
     }
     client = OpenAI(api_key=key, base_url=url)
 
+    # Get retry configuration
+    retry_config = _get_retry_config()
+    
     references = reference_images or []
     if mode == "reference":
         if not references:
@@ -174,7 +237,18 @@ def generate_image(
             for item in references
         ]
         request_kwargs["image"] = image_files[0] if len(image_files) == 1 else image_files
-        response = client.images.edit(**request_kwargs)
+        
+        try:
+            response = _retry_with_backoff(
+                client.images.edit,
+                max_retries=retry_config["max_retries"],
+                backoff_factor=retry_config["backoff_factor"],
+                timeout=retry_config["timeout"],
+                **request_kwargs,
+            )
+        except (APITimeoutError, APIConnectionError) as exc:
+            raise RuntimeError(f"图片编辑请求超时或连接失败：{exc}") from exc
+        
         payload = response.to_dict()
         image_paths = images_from_payload(payload)
         return {
@@ -185,7 +259,17 @@ def generate_image(
             "elapsed_seconds": time.monotonic() - started,
         }
 
-    response = client.images.generate(**request_kwargs)
+    try:
+        response = _retry_with_backoff(
+            client.images.generate,
+            max_retries=retry_config["max_retries"],
+            backoff_factor=retry_config["backoff_factor"],
+            timeout=retry_config["timeout"],
+            **request_kwargs,
+        )
+    except (APITimeoutError, APIConnectionError) as exc:
+        raise RuntimeError(f"图片生成请求超时或连接失败：{exc}") from exc
+    
     payload = response.to_dict()
     image_paths = images_from_payload(payload)
     return {

@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import logging
 import mimetypes
 import re
 import secrets
@@ -30,13 +31,19 @@ from huishi.records import (
     list_records_for_user,
     record_generation_seed,
 )
+from huishi.validation import (
+    ValidationError,
+    sanitize_filename,
+    validate_generation_count,
+    validate_http_url,
+)
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("workspace", __name__)
 ALLOWED_MODES = {"text", "reference"}
 ALLOWED_QUALITIES = {"auto", "high", "medium", "low"}
 ALLOWED_OUTPUT_FORMATS = {"png", "jpeg", "webp"}
-ALLOWED_REFERENCE_MIMETYPES = {"image/png", "image/jpeg", "image/webp"}
-ALLOWED_REFERENCE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
 
 def _mask_key(key: str) -> str:
@@ -133,13 +140,19 @@ def settings():
     settings_values = get_app_settings()
     if request.method == "POST":
         base_url = request.form.get("base_url", "").strip()
-        if base_url and not is_http_url(base_url):
-            return "Base URL 必须以 http:// 或 https:// 开头", 400
+        if base_url:
+            try:
+                validate_http_url(base_url)
+            except ValidationError as exc:
+                return str(exc), 400
         posted_api_key = request.form.get("api_key", "").strip()
         api_key = posted_api_key or settings_values.get("image_api_key", "")
         prompt_base_url = request.form.get("prompt_base_url", "").strip()
-        if prompt_base_url and not is_http_url(prompt_base_url):
-            return "Prompt 优化 Base URL 必须以 http:// 或 https:// 开头", 400
+        if prompt_base_url:
+            try:
+                validate_http_url(prompt_base_url)
+            except ValidationError as exc:
+                return str(exc), 400
         posted_prompt_api_key = request.form.get("prompt_api_key", "").strip()
         prompt_api_key = posted_prompt_api_key or settings_values.get("prompt_api_key", "")
         prompt_model = request.form.get("prompt_model", "").strip()
@@ -437,16 +450,8 @@ def _finalize_generation(
 
 
 def parse_generation_count(raw_count: str | None) -> int:
-    try:
-        count = int(raw_count or "1")
-    except (TypeError, ValueError) as exc:
-        raise ValueError("生成数量必须是有效数字") from exc
-    if count < 1:
-        raise ValueError("閻㈢喐鍨氶弫浼村櫤韫囧懘銆忔径褌绨?0")
     max_gen = int(current_app.config.get("MAX_GENERATION_COUNT", 8))
-    if count > max_gen:
-        raise ValueError(f"单次生成最多支持 {max_gen} 张图片")
-    return count
+    return validate_generation_count(raw_count, max_count=max_gen)
 
 
 def parse_optional_int(raw_value: str | None) -> int | None:
@@ -468,11 +473,6 @@ def parse_reference_path_form_values() -> list[str]:
             if path and path.startswith("/static/uploads/") and path not in paths:
                 paths.append(path)
     return paths
-
-
-def is_http_url(raw_url: str) -> bool:
-    parsed = urlsplit(raw_url)
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 def get_app_settings(*keys: str) -> dict[str, str]:
@@ -497,27 +497,60 @@ def save_app_setting(key: str, value: str) -> None:
     )
 
 
-def is_allowed_reference_image(file_storage) -> bool:
-    suffix = Path(file_storage.filename or "").suffix.lower()
-    return file_storage.mimetype in ALLOWED_REFERENCE_MIMETYPES and suffix in ALLOWED_REFERENCE_SUFFIXES
+def is_allowed_reference_image(file_storage: FileStorage) -> bool:
+    """Check if file is an allowed reference image type."""
+    try:
+        from huishi.validation import validate_reference_image_file
+
+        validate_reference_image_file(file_storage)
+        return True
+    except ValidationError:
+        return False
 
 
-def save_reference_images(reference_images) -> list[str]:
+def save_reference_images(reference_images: list[FileStorage]) -> list[str]:
+    """Save validated reference images to disk.
+    
+    Args:
+        reference_images: List of FileStorage objects
+        
+    Returns:
+        List of saved image paths
+        
+    Raises:
+        ValidationError: If any file fails validation
+    """
+    from huishi.validation import validate_reference_image_file
+    
     output_dir: Path = current_app.config["OUTPUT_DIR"]
     output_dir.mkdir(parents=True, exist_ok=True)
     saved_paths: list[str] = []
+    
     for file_storage in reference_images:
-        original_name = secure_filename(file_storage.filename or "reference.png")
+        # Validate before saving
+        try:
+            validate_reference_image_file(file_storage)
+        except ValidationError as exc:
+            logger.warning(f"Reference image validation failed: {exc}")
+            raise ValueError(str(exc)) from exc
+        
+        # Sanitize filename
+        original_name = sanitize_filename(file_storage.filename or "reference.png")
         original_path = Path(original_name)
         suffix = original_path.suffix.lower() or Path(file_storage.filename or "").suffix.lower()
         stem = original_path.stem or "reference"
         candidate = output_dir / f"ref_{stem}_{secrets.token_urlsafe(8)}{suffix}"
+        
         while candidate.exists():
             candidate = output_dir / f"ref_{stem}_{secrets.token_urlsafe(8)}{suffix}"
+        
         file_storage.stream.seek(0)
         file_storage.save(candidate)
         file_storage.stream.seek(0)
+        
+        logger.debug(f"Reference image saved: {candidate.name}")
         saved_paths.append(f"/static/uploads/{candidate.name}")
+    
     return saved_paths
 
 
