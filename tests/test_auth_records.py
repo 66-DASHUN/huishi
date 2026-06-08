@@ -682,6 +682,24 @@ def test_output_composer_does_not_auto_collapse_when_editing_reference_seed():
     assert "setComposerCollapsed(false)" in collapse_function
 
 
+def test_reference_material_preview_treats_hovered_stack_as_expanded():
+    from pathlib import Path
+    import re
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+    helper_function = re.search(
+        r"  function isReferenceStackExpanded\(\) \{(?P<body>[\s\S]*?)\n  \}",
+        script,
+    ).group("body")
+    click_block = re.search(
+        r"referencePreview\?\.addEventListener\(\"click\", \(event\) => \{(?P<body>[\s\S]*?)\n  \}\);",
+        script,
+    ).group("body")
+
+    assert "matches(\":hover\")" in helper_function
+    assert "isReferenceStackExpanded()" in click_block
+
+
 def test_workspace_contains_generation_task_region(client):
     client.post("/register", data={"username": "taskregion", "password": "secret123"}, follow_redirects=True)
 

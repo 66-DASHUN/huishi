@@ -970,12 +970,16 @@ function bindReferenceDrop() {
 }
 
 function bindReferenceStack() {
+  function isReferenceStackExpanded() {
+    return Boolean(referenceStack?.classList.contains("is-expanded") || referenceStack?.matches(":hover"));
+  }
+
   referenceAddButton?.addEventListener("click", (event) => {
     event.stopPropagation();
     referenceImages?.click();
   });
   referencePreview?.addEventListener("click", (event) => {
-    if (referenceStack && !referenceStack.classList.contains("is-expanded")) return;
+    if (referenceStack && !isReferenceStackExpanded()) return;
     const tile = event.target.closest(".reference-material-tile");
     if (!tile) return;
     const id = tile.dataset.referenceId;
@@ -998,7 +1002,7 @@ function bindReferenceStack() {
   referenceStack?.addEventListener("click", (event) => {
     if (!referenceMaterials.length) return;
     if (event.target.closest(".reference-material-tile")) {
-      if (!referenceStack.classList.contains("is-expanded")) {
+      if (!isReferenceStackExpanded()) {
         event.preventDefault();
         referenceStack.classList.add("is-expanded");
       }
