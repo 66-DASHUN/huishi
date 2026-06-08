@@ -712,9 +712,9 @@ def test_custom_dimension_inputs_have_room_for_four_digit_sizes():
     ).group(1)
     input_rule = re.search(r"^\.dimension-inline \.custom-dim-input \{([^}]*)\}", stylesheet, re.MULTILINE).group(1)
 
-    assert "flex: 0 0 164px" in dimension_rule
-    assert "flex: 0 0 62px" in input_rule
-    assert "width: 62px" in input_rule
+    assert "flex: 0 0 208px" in dimension_rule
+    assert "flex: 0 0 80px" in input_rule
+    assert "width: 80px" in input_rule
     assert "height: 24px" in input_rule
     assert "line-height: 24px" in input_rule
 

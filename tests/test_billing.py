@@ -50,6 +50,24 @@ def test_size_with_non_positive_edge_is_rejected():
         tier_for_size("-1x100")
 
 
+def test_placeholder_images_are_never_used_outside_testing(app, monkeypatch):
+    from huishi import image_api
+
+    monkeypatch.setenv("USE_PLACEHOLDER_IMAGES", "1")
+    with app.app_context():
+        app.config["TESTING"] = False
+        with pytest.raises(ValueError, match="API Key"):
+            image_api.generate_image(
+                prompt="production should not see placeholders",
+                mode="text",
+                ratio="16:9",
+                resolution="2560x1440",
+                count=1,
+                api_key="",
+                base_url="https://example.com/v1",
+            )
+
+
 def test_default_text_generation_2k_costs_two_points(app):
     with app.app_context():
         cost = billing.calculate_cost("text", "2K", 1)

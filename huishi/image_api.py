@@ -138,7 +138,7 @@ def generate_image(
     output_format: str = "png",
     reference_images: list[FileStorage] | None = None,
 ) -> dict[str, object]:
-    if os.environ.get("USE_PLACEHOLDER_IMAGES") == "1":
+    if current_app.config.get("TESTING") and os.environ.get("USE_PLACEHOLDER_IMAGES") == "1":
         return placeholder_image(prompt=prompt, ratio=ratio, resolution=resolution)
 
     started = time.monotonic()
