@@ -148,6 +148,10 @@ def create_app(*, testing: bool = False) -> Flask:
     return app
 
 
+def should_enable_debug() -> bool:
+    return os.environ.get("FLASK_DEBUG", "0") == "1"
+
+
 if __name__ == "__main__":
     app = create_app()
-    app.run(host="0.0.0.0", port=8000, debug=os.environ.get("FLASK_DEBUG", "1") == "1")
+    app.run(host="0.0.0.0", port=8000, debug=should_enable_debug())
