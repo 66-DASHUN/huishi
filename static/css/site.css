@@ -671,9 +671,9 @@ button, input, select { font: inherit; }
 .reference-input[hidden] { display: none; }
 .reference-material-stack {
   position: relative;
-  width: 72px;
-  min-width: 72px;
-  height: 88px;
+  width: 64px;
+  min-width: 64px;
+  height: 64px;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -682,10 +682,10 @@ button, input, select { font: inherit; }
 }
 .reference-add-card,
 .reference-material-tile {
-  width: 56px;
-  min-width: 56px;
-  height: 72px;
-  min-height: 72px;
+  width: 44px;
+  min-width: 44px;
+  height: 56px;
+  min-height: 56px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--studio-border) 80%, transparent);
   border-radius: 8px;
@@ -698,7 +698,7 @@ button, input, select { font: inherit; }
   z-index: 2;
   display: grid;
   place-items: center;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
@@ -715,12 +715,12 @@ button, input, select { font: inherit; }
   inset: 0 auto auto 0;
   display: flex;
   align-items: flex-start;
-  min-width: 72px;
-  min-height: 88px;
+  min-width: 64px;
+  min-height: 64px;
 }
 .reference-material-tile {
   position: absolute;
-  left: calc(var(--stack-index, 0) * 7px);
+  left: calc(var(--stack-index, 0) * 6px);
   top: calc(var(--stack-index, 0) * 3px);
   z-index: calc(10 - var(--stack-index, 0));
   overflow: hidden;
@@ -744,15 +744,15 @@ button, input, select { font: inherit; }
 }
 .reference-material-stack.has-materials .reference-add-card {
   position: absolute;
-  left: 40px;
-  top: 48px;
+  left: 32px;
+  top: 34px;
   z-index: 30;
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
   border-radius: 999px;
-  font-size: 22px;
+  font-size: 18px;
   transform: none;
   box-shadow: 0 8px 22px color-mix(in srgb, var(--studio-soft-shadow) 70%, transparent);
 }
@@ -761,18 +761,18 @@ button, input, select { font: inherit; }
 }
 .reference-material-stack:hover,
 .reference-material-stack.is-expanded {
-  width: 72px;
+  width: 64px;
   z-index: 12;
 }
 .reference-material-stack:hover .reference-material-list,
 .reference-material-stack.is-expanded .reference-material-list {
   position: absolute;
-  min-width: min(292px, 42vw);
+  min-width: min(244px, 42vw);
 }
 .reference-material-stack:hover .reference-material-tile,
 .reference-material-stack.is-expanded .reference-material-tile {
   position: absolute;
-  left: calc(var(--stack-index, 0) * 64px);
+  left: calc(var(--stack-index, 0) * 52px);
   top: 0;
   z-index: 1;
   margin-right: 0;
@@ -844,7 +844,7 @@ button, input, select { font: inherit; }
 }
 .workspace-page .composer .parameter-trigger, .workspace-page .composer .dimension-inline { min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; cursor: pointer; white-space: nowrap; }
 .workspace-page .composer .parameter-trigger { flex: 0 0 68px; }
-.workspace-page .composer .dimension-inline { flex: 0 0 138px; }
+.workspace-page .composer .dimension-inline { flex: 0 0 164px; }
 .parameter-trigger span { color: var(--studio-muted); font-size: 9px; letter-spacing: .04em; line-height: 1; }
 .parameter-trigger strong { color: inherit; font-size: 13px; font-weight: 900; line-height: 1; }
 .parameter-trigger small { color: var(--studio-muted); font-size: 12px; line-height: 1; }
@@ -857,7 +857,7 @@ button, input, select { font: inherit; }
   font-variant-numeric: tabular-nums;
 }
 .custom-dim-input:focus { outline: 0; border-color: rgba(0,200,215,.48); box-shadow: 0 0 0 2px rgba(0,200,215,.12); }
-.dimension-inline .custom-dim-input { flex: 0 0 52px; width: 52px; }
+.dimension-inline .custom-dim-input { flex: 0 0 62px; width: 62px; height: 24px; line-height: 24px; }
 .dimension-inline .dim-sep { color: var(--studio-muted); font-size: 11px; font-weight: 900; user-select: none; }
 .count-field { min-width: 0; display: inline-grid; grid-template-columns: auto minmax(34px, 1fr); align-items: center; gap: 6px; padding: 0 8px; color: var(--studio-muted); font-size: 12px; }
 .count-field input { width: 100%; height: 30px; border: 0; border-radius: 8px; background: var(--studio-surface); color: var(--studio-text); text-align: center; line-height: 30px; }
@@ -1522,13 +1522,13 @@ button, input, select { font: inherit; }
   .output-composer.is-collapsed .composer-controls { display: flex; grid-column: 2; }
   .parameter-trigger, .dimension-inline, .count-stepper, .composer-meter, .optimize-button, .generate-button { min-height: 42px; font-size: 12px; }
   .composer-meter, .optimize-button, .generate-button { grid-column: 1 / -1; }
-  .reference-material-stack { width: 72px; min-width: 72px; grid-column: auto; }
-  .reference-material-stack:hover { width: 72px; }
+  .reference-material-stack { width: 64px; min-width: 64px; grid-column: auto; }
+  .reference-material-stack:hover { width: 64px; }
   .reference-material-stack.is-expanded { width: min(260px, 64vw); }
-  .reference-material-stack:hover .reference-material-list { position: absolute; min-width: 72px; }
+  .reference-material-stack:hover .reference-material-list { position: absolute; min-width: 64px; }
   .reference-material-stack:hover .reference-material-tile {
     position: absolute;
-    left: calc(var(--stack-index, 0) * 7px);
+    left: calc(var(--stack-index, 0) * 6px);
     top: calc(var(--stack-index, 0) * 3px);
     margin-right: 0;
     transform: rotate(calc((var(--stack-index, 0) - 1) * -5deg));

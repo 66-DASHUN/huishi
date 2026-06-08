@@ -153,6 +153,8 @@ function applySeedToComposer(seed) {
   if (qualityInput) qualityInput.value = seed.quality || "auto";
   if (outputFormatInput) outputFormatInput.value = seed.output_format || "png";
   if (countInput) countInput.value = seed.count || 1;
+  clearReferenceImages();
+  (seed.reference_paths || []).forEach((path) => addReferencePath(path));
   syncModeButtons();
   syncReferenceField();
   syncSizeDisplay();
@@ -832,9 +834,13 @@ function setComposerCollapsed(collapsed) {
   form.classList.toggle("is-collapsed", collapsed);
 }
 
+function shouldKeepComposerExpanded() {
+  return Boolean(getEditSeed() || referenceMaterials.length || form?.classList.contains("has-reference"));
+}
+
 function bindComposerCollapse() {
   if (!form) return;
-  setComposerCollapsed(form.classList.contains("output-composer"));
+  setComposerCollapsed(form.classList.contains("output-composer") && !shouldKeepComposerExpanded());
 
   form.addEventListener("pointerdown", (event) => {
     if (event.target.closest(".generate-button")) return;
@@ -843,6 +849,7 @@ function bindComposerCollapse() {
   form.addEventListener("focusin", () => setComposerCollapsed(false));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && form.classList.contains("output-composer")) {
+      if (shouldKeepComposerExpanded()) return;
       setComposerCollapsed(true);
       closeParameterPanels();
       form.querySelector('[name="prompt"]')?.blur();
@@ -850,6 +857,10 @@ function bindComposerCollapse() {
   });
   window.addEventListener("scroll", () => {
     if (!form.classList.contains("output-composer")) return;
+    if (shouldKeepComposerExpanded()) {
+      setComposerCollapsed(false);
+      return;
+    }
     if (document.activeElement && form.contains(document.activeElement)) return;
     setComposerCollapsed(window.scrollY > 24);
   }, { passive: true });

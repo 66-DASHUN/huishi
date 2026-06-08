@@ -565,10 +565,101 @@ def test_reference_material_stack_expands_without_reflowing_controls():
         re.MULTILINE,
     ).group(1)
 
-    assert "width: 72px" in expanded_stack
+    assert "width: 64px" in expanded_stack
     assert "width: min(292px, 42vw)" not in expanded_stack
     assert "position: absolute" in expanded_list
     assert "position: relative" not in expanded_tiles
+
+
+def test_reference_material_stack_uses_compact_overlapping_cards():
+    from pathlib import Path
+    import re
+
+    stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
+    stack_rule = re.search(r"^\.reference-material-stack \{([^}]*)\}", stylesheet, re.MULTILINE).group(1)
+    card_rule = re.search(
+        r"^\.reference-add-card,\n\.reference-material-tile \{([^}]*)\}",
+        stylesheet,
+        re.MULTILINE,
+    ).group(1)
+    material_add_rule = re.search(
+        r"^\.reference-material-stack\.has-materials \.reference-add-card \{([^}]*)\}",
+        stylesheet,
+        re.MULTILINE,
+    ).group(1)
+
+    assert "width: 64px" in stack_rule
+    assert "min-width: 64px" in stack_rule
+    assert "height: 64px" in stack_rule
+    assert "width: 44px" in card_rule
+    assert "height: 56px" in card_rule
+    assert "width: 26px" in material_add_rule
+    assert "height: 26px" in material_add_rule
+
+
+def test_custom_dimension_inputs_have_room_for_four_digit_sizes():
+    from pathlib import Path
+    import re
+
+    stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
+    dimension_rule = re.search(
+        r"^\.workspace-page \.composer \.dimension-inline \{([^}]*)\}",
+        stylesheet,
+        re.MULTILINE,
+    ).group(1)
+    input_rule = re.search(r"^\.dimension-inline \.custom-dim-input \{([^}]*)\}", stylesheet, re.MULTILINE).group(1)
+
+    assert "flex: 0 0 164px" in dimension_rule
+    assert "flex: 0 0 62px" in input_rule
+    assert "width: 62px" in input_rule
+    assert "height: 24px" in input_rule
+    assert "line-height: 24px" in input_rule
+
+
+def test_mobile_material_stack_keeps_same_compact_anchor():
+    from pathlib import Path
+
+    stylesheet = Path("static/css/site.css").read_text(encoding="utf-8")
+    mobile_section = stylesheet[stylesheet.index("@media (max-width: 760px)") :]
+
+    assert ".reference-material-stack { width: 64px; min-width: 64px; grid-column: auto; }" in mobile_section
+    assert ".reference-material-stack:hover { width: 64px; }" in mobile_section
+
+
+def test_workspace_edit_seed_restores_reference_material_paths():
+    from pathlib import Path
+    import re
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+    seed_function = re.search(
+        r"function applySeedToComposer\(seed\) \{(?P<body>[\s\S]*?)\n\}",
+        script,
+    ).group("body")
+
+    assert "seed.reference_paths" in seed_function
+    assert "addReferencePath" in seed_function
+    assert "clearReferenceImages" in seed_function
+
+
+def test_output_composer_does_not_auto_collapse_when_editing_reference_seed():
+    from pathlib import Path
+    import re
+
+    script = Path("static/js/workspace.js").read_text(encoding="utf-8")
+    keep_open_function = re.search(
+        r"function shouldKeepComposerExpanded\(\) \{(?P<body>[\s\S]*?)\n\}",
+        script,
+    ).group("body")
+    collapse_function = re.search(
+        r"function bindComposerCollapse\(\) \{(?P<body>[\s\S]*?)\n\}",
+        script,
+    ).group("body")
+
+    assert "getEditSeed()" in keep_open_function
+    assert "referenceMaterials.length" in keep_open_function
+    assert "form?.classList.contains(\"has-reference\")" in keep_open_function
+    assert "!shouldKeepComposerExpanded()" in collapse_function
+    assert "setComposerCollapsed(false)" in collapse_function
 
 
 def test_workspace_contains_generation_task_region(client):
