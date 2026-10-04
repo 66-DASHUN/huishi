@@ -1,0 +1,87 @@
+<aside class="studio-rail" aria-label="主导航">
+  <a class="rail-logo" href="/" aria-label="绘世首页">绘</a>
+  {% if not hide_studio_sidebar|default(false) %}
+  <button type="button" class="conversation-toggle" data-conversation-toggle aria-controls="studio-conversations" aria-expanded="false" aria-label="打开历史对话">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  {% endif %}
+  <nav class="rail-nav" aria-label="创作导航">
+    <a class="rail-nav-item {{ 'is-active' if active_nav == 'canvas' else '' }}" href="/canvas" title="画布">
+      <span class="rail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8"/><path d="M8 12h6"/><path d="M8 16h4"/></svg>
+      </span>
+      <span>画布</span>
+    </a>
+    <a class="rail-nav-item {{ 'is-active' if active_nav == 'generate' else '' }}" href="{{ '/workspace?dialogue=' ~ active_dialogue['id'] if active_dialogue else '/workspace' }}" title="生成">
+      <span class="rail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><path d="M6 4h8l4 4v12H6z"/><path d="M14 4v5h5"/><path d="M9 15h6"/><path d="M12 12v6"/></svg>
+      </span>
+      <span>生成</span>
+    </a>
+    <a class="rail-nav-item {{ 'is-active' if active_nav == 'assets' else '' }}" href="/assets" title="资产">
+      <span class="rail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 15l2.6-3 2 2.3 1.4-1.6L18 17"/><circle cx="9" cy="9" r="1.2"/></svg>
+      </span>
+      <span>资产</span>
+    </a>
+    <a class="rail-nav-item {{ 'is-active' if active_nav == 'prompts' else '' }}" href="/prompts" title="提示词库">
+      <span class="rail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3-3z"/><path d="M5 4v13"/><path d="M9 8h6"/><path d="M9 12h5"/></svg>
+      </span>
+      <span>词库</span>
+    </a>
+  </nav>
+  <div class="rail-footer">
+    <div class="rail-theme-toggle">{% include "partials/theme_options.html" %}</div>
+    <details class="rail-settings">
+      <summary aria-label="打开设置菜单" title="设置">
+        <span class="rail-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L14.3 3H9.7l-.4 2.9A7 7 0 0 0 7.4 7L5 6 3 9.4l2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.1l-2 1.5 2 3.4 2.4-1c.6.5 1.2.8 1.9 1.1l.4 2.9h4.6l.4-2.9c.7-.3 1.3-.6 1.9-1.1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1.1z"/></svg>
+        </span>
+      </summary>
+      <div class="rail-settings-panel">
+        <div class="settings-menu-group">
+          <a href="/account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>账户</span></a>
+          <a href="/pricing"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M16 15h2"/></svg><span>充值</span></a>
+        </div>
+        {% if g.user["role"] == "admin" %}
+        <div class="settings-menu-group settings-menu-admin"><a class="rail-admin-link" href="/admin/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg><span>管理后台</span></a></div>
+        {% endif %}
+        <div class="settings-menu-group settings-menu-danger"><a href="/logout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/></svg><span>退出登录</span></a></div>
+      </div>
+    </details>
+    <a class="rail-points" href="/pricing" title="充值">{{ g.user["points"] }} 点</a>
+  </div>
+</aside>
+
+{% if not hide_studio_sidebar|default(false) %}
+<aside id="studio-conversations" class="studio-sidebar" aria-label="创作入口">
+  <header class="sidebar-header">
+    <strong>开启创作</strong>
+  </header>
+  <a class="conversation-entry {{ 'is-pinned' if is_new_creation|default(false) else '' }}" href="/workspace?new=1">
+    <span class="conversation-thumb" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+    </span>
+    <span>新对话</span>
+  </a>
+  <div class="sidebar-section-title">历史对话</div>
+  <nav class="dialogue-list" aria-label="历史对话">
+    {% for dialogue in dialogues|default([]) %}
+    <div class="dialogue-row" data-dialogue-row data-dialogue-id="{{ dialogue['id'] }}">
+      <a class="dialogue-link {{ 'active' if active_dialogue and dialogue['id'] == active_dialogue['id'] and not is_new_creation|default(false) else '' }}" href="/workspace?dialogue={{ dialogue['id'] }}">
+        <span>{{ dialogue["title"] }}</span>
+      </a>
+      <div class="dialogue-menu" data-dialogue-menu>
+        <button type="button" class="dialogue-menu-trigger" data-dialogue-menu-trigger aria-label="对话操作" title="对话操作">...</button>
+        <div class="dialogue-menu-panel" data-dialogue-menu-panel hidden>
+          <button type="button" data-delete-dialogue>删除</button>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <span class="sidebar-empty">暂无历史对话</span>
+    {% endfor %}
+  </nav>
+</aside>
+{% endif %}

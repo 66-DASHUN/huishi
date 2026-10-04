@@ -1,0 +1,46 @@
+{% extends "admin/layout.html" %}
+{% block title %}运行总览 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="admin-page-header">
+  <div>
+    <span>OPERATIONS</span>
+    <h1>运行总览</h1>
+  </div>
+  <time>{{ operations_health["database"]["checked_at"][:19].replace("T", " ") }} UTC</time>
+</header>
+
+<section class="admin-metric-strip" aria-label="核心指标">
+  <article><span>用户</span><strong>{{ stats["user_count"] }}</strong><small>账户总数</small></article>
+  <article><span>生成记录</span><strong>{{ stats["record_count"] }}</strong><small>累计结果</small></article>
+  <article><span>累计消耗</span><strong>{{ stats["points_charged"] }}</strong><small>积分</small></article>
+</section>
+
+<section class="admin-section">
+  <div class="admin-section-heading"><h2>运行状态</h2><span>实时探测</span></div>
+  <div class="admin-health-table" role="table" aria-label="运行状态">
+    {% set labels = {"database":"数据库", "redis":"Redis / 队列", "canvas":"画布", "agent":"Agent", "disk":"磁盘", "backup":"备份", "failed_tasks":"失败任务", "storage_cleanup":"存储清理"} %}
+    {% set status_labels = {"healthy":"正常", "ok":"正常", "warning":"警告", "degraded":"异常", "error":"异常", "failed":"失败", "unknown":"未知"} %}
+    {% for key, item in operations_health.items() %}
+    <div role="row" data-health-status="{{ item['status'] }}">
+      <span role="cell"><i></i>{{ labels[key] }}</span>
+      <strong role="cell" data-health-label>{{ status_labels.get(item["status"], item["status"]) }}</strong>
+      <span role="cell">{{ item["message"] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="admin-section">
+  <div class="admin-section-heading"><h2>近期业务</h2><a href="/admin/records">全部业务流水</a></div>
+  <div class="admin-compact-list admin-dashboard-activity-list">
+    {% for event in recent_activity %}
+    <div>
+      <strong>{{ event["username"] }}</strong>
+      <span>{{ event["event_label"] }}</span>
+      <span>{{ "%+d"|format(event["points_delta"]) }} 点</span>
+      <small title="{{ event['summary']|e }}">{{ event["summary"] }}</small>
+    </div>
+    {% else %}<p class="admin-empty">暂无业务事件</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

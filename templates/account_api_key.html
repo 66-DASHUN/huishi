@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}API 配置 - 绘世{% endblock %}
+{% block body_class %}console-page{% endblock %}
+{% block content %}
+<main class="simple-page account-console">
+  <nav class="simple-nav">
+    <a href="/">绘世</a>
+    <a href="/workspace">工作台</a>
+    <a href="/account">账户中心</a>
+    <a href="/logout">退出</a>
+  </nav>
+  <header class="account-summary account-hero-panel">
+    <div>
+      <span>API 配置</span>
+      <h1>自定义 API Key</h1>
+      <p>与系统配置中的“用户自备 Key”策略保持一致：开启后优先使用个人 Key，关闭或未配置时使用共享资源并按积分计费。</p>
+    </div>
+    {% if user_key_enabled and has_user_key %}
+    <strong class="mode-badge mode-user-key">自备 Key（不消耗积分）</strong>
+    {% else %}
+    <strong class="mode-badge mode-shared">共享资源（消耗积分）</strong>
+    {% endif %}
+  </header>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    {% for msg in messages %}
+    <p class="flash-message">{{ msg }}</p>
+    {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <section class="settings-section account-key-panel">
+    <div class="section-heading account-section-heading">
+      <h2>API Key 设置</h2>
+    </div>
+    <p class="settings-description">
+      填写您自己的 API Key 后，生图时将直接使用您的 Key，<strong>不消耗积分</strong>。
+      Key 加密存储，留空提交则保持原值不变。
+    </p>
+    {% if not user_key_enabled %}
+    <p class="settings-description">管理员已禁用用户自备 Key 功能，当前将使用共享资源并按积分计费。</p>
+    {% endif %}
+    <form method="post" action="/account/api-key" class="settings-form account-key-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field-group">
+        <label for="api_key">API Key</label>
+        <input type="password" id="api_key" name="api_key" autocomplete="new-password"
+               placeholder="{{ masked_key if masked_key else '填写后保存，留空则保持不变' }}" {% if not user_key_enabled %}disabled{% endif %}>
+        {% if masked_key %}
+        <small class="field-hint">当前已配置：{{ masked_key }}（留空提交则保持不变）</small>
+        {% else %}
+        <small class="field-hint">尚未配置，当前使用共享资源（消耗积分）</small>
+        {% endif %}
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" {% if not user_key_enabled %}disabled{% endif %}>保存 API Key</button>
+        <a href="/account" class="btn-secondary">返回账户中心</a>
+      </div>
+    </form>
+  </section>
+
+  {% if has_user_key %}
+  <section class="settings-section danger-zone account-key-panel">
+    <div class="section-heading account-section-heading danger-section-heading">
+      <h2>清除 API Key</h2>
+    </div>
+    <p class="settings-description">清除后将恢复使用共享资源，生图将重新消耗积分。</p>
+    <form method="post" action="/account/api-key">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="clear_api_key" value="1">
+      <button type="submit" class="btn-danger"
+              onclick="return confirm('确认清除 API Key？清除后将恢复使用共享资源，生图将重新消耗积分。')">清除 API Key</button>
+    </form>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/theme.js') }}"></script>{% endblock %}

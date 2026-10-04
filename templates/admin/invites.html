@@ -1,0 +1,126 @@
+{% extends "admin/layout.html" %}
+{% block title %}邀请码管理 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="page-hero admin-users-hero">
+  <div>
+    <span>邀请码</span>
+    <h1>邀请码管理</h1>
+    <p>配置用户自助邀请码默认额度，并管理每个邀请码的归属、赠送额度和使用次数。</p>
+  </div>
+</header>
+
+<section class="admin-form-panel">
+  <h2>默认赠送额度</h2>
+  <form method="post" action="/admin/invites/default" class="admin-operation-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+      <span>用户自助生成默认额度</span>
+      <input name="invite_default_reward_points" type="number" min="0" value="{{ invite_default_reward_points }}" required>
+    </label>
+    <button type="submit">保存默认额度</button>
+  </form>
+</section>
+
+<section class="admin-form-panel">
+  <h2>创建邀请码</h2>
+  <form method="post" action="/admin/invites" class="admin-operation-form invite-create-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>
+      <span>邀请码</span>
+      <input name="code" placeholder="留空自动生成">
+    </label>
+    <label>
+      <span>归属用户</span>
+      <select name="owner_user_id" required>
+        {% for user in users %}
+        <option value="{{ user['id'] }}">#{{ user["id"] }} {{ user["username"] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>赠送额度</span>
+      <input name="reward_points" type="number" min="0" value="{{ invite_default_reward_points }}" required>
+    </label>
+    <label>
+      <span>最大使用次数</span>
+      <input name="max_uses" type="number" min="1" placeholder="不限">
+    </label>
+    <label class="checkbox-label">
+      <input name="enabled" type="checkbox" checked>
+      <span>启用</span>
+    </label>
+    <button type="submit">创建邀请码</button>
+  </form>
+</section>
+
+<div class="admin-table-wrap">
+  <form id="invite-bulk-form" method="post" action="/admin/invites/bulk" data-bulk-invite-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="admin-bulk-actions">
+      <span>批量操作</span>
+      <button type="submit" name="action" value="enable">启用</button>
+      <button type="submit" name="action" value="disable">停用</button>
+      <button
+        type="submit"
+        name="action"
+        value="delete"
+        class="danger-button"
+        data-confirm-bulk="删除后邀请码不可再使用，历史积分流水保留，确认删除？"
+      >删除</button>
+    </div>
+  </form>
+  <table class="admin-user-table invite-admin-table">
+    <thead>
+      <tr>
+        <th><input type="checkbox" data-bulk-check-all aria-label="全选邀请码"></th>
+        <th>邀请码</th>
+        <th>归属用户</th>
+        <th>额度</th>
+        <th>使用次数</th>
+        <th>状态</th>
+        <th>编辑</th>
+        <th>删除</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for invite in invites %}
+      <tr>
+        <td><input form="invite-bulk-form" type="checkbox" name="invite_ids[]" value="{{ invite['id'] }}" data-bulk-item aria-label="选择 {{ invite['code'] }}"></td>
+        <td><strong>{{ invite["code"] }}</strong></td>
+        <td>{{ invite["owner_username"] }}</td>
+        <td>{{ invite["reward_points"] }} 点</td>
+        <td>{{ invite["used_count"] }}{% if invite["max_uses"] is not none %} / {{ invite["max_uses"] }}{% else %} / 不限{% endif %}</td>
+        <td>{{ "启用" if invite["enabled"] else "停用" }}</td>
+        <td>
+          <form method="post" action="/admin/invites/{{ invite['code'] }}" class="table-action-form invite-edit-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label>
+              <span>额度</span>
+              <input name="reward_points" type="number" min="0" value="{{ invite['reward_points'] }}" aria-label="额度" placeholder="额度" required>
+            </label>
+            <label>
+              <span>次数</span>
+              <input name="max_uses" type="number" min="{{ invite['used_count'] or 1 }}" value="{{ invite['max_uses'] or '' }}" aria-label="次数" placeholder="不限">
+            </label>
+            <label class="table-checkbox">
+              <input name="enabled" type="checkbox" {% if invite["enabled"] %}checked{% endif %}>
+              <span>启用</span>
+            </label>
+            <button type="submit">保存</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/admin/invites/{{ invite['code'] }}/delete" class="table-action-form compact-delete" data-confirm-delete="删除后邀请码不可再使用，历史积分流水保留，确认删除？">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="danger-button">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">暂无邀请码。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "admin/_pagination.html" %}
+{% endblock %}

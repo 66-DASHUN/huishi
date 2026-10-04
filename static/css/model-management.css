@@ -1,0 +1,96 @@
+.model-management, .mm-dialog { --mm-muted: var(--admin-muted, #626b78); color: var(--admin-ink); font-size: 13px; }
+.model-management [hidden], .mm-dialog [hidden] { display: none !important; }
+.mm-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--admin-line); padding: 0 20px; overflow-x: auto; }
+.mm-tabs [role=tab] { flex: 0 0 auto; padding: 12px 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--mm-muted); box-shadow: none; font: inherit; font-weight: 600; }
+.mm-tabs [aria-selected=true] { color: var(--admin-ink); border-bottom-color: var(--admin-accent, #5475e8); }
+.mm-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px 20px; }
+.mm-search { flex: 1; max-width: 360px; min-width: 160px; }
+.mm-search input { width: 100%; }
+.mm-toolbar > button:last-child { margin-left: auto; }
+.model-management :is(input,select), .mm-dialog :is(input,select) { max-width: 100%; min-height: 36px; border: 1px solid var(--admin-line-strong); border-radius: 6px; background: var(--admin-surface); color: var(--admin-ink); padding: 7px 10px; font: inherit; box-sizing: border-box; }
+.model-management input::placeholder, .mm-dialog input::placeholder { color: var(--mm-muted); opacity: 1; }
+.model-management button, .mm-dialog button { min-height: 34px; cursor: pointer; font: inherit; }
+.model-management button:disabled, .mm-dialog button:disabled { opacity: .55; cursor: not-allowed; }
+.model-management :focus-visible, .mm-dialog :focus-visible { outline: 2px solid var(--admin-accent, #5475e8); outline-offset: 3px; }
+.model-management .mm-table { width: 100%; min-width: 780px; table-layout: auto; }
+.model-management .mm-table :is(th,td) { padding: 12px 16px; vertical-align: top; width: auto; }
+.mm-table td:first-child { min-width: 130px; }
+.mm-table td small { display: block; margin-top: 4px; line-height: 1.5; color: var(--mm-muted); }
+.mm-table td code { font-size: 11px; overflow-wrap: anywhere; }
+.mm-table .mm-address { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 166px; }
+.mm-actions button { white-space: nowrap; padding: 4px 8px; }
+.mm-status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mm-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mm-muted); }
+.mm-status[data-state=published]::before, .mm-status[data-state=active]::before, .mm-status[data-state=succeeded]::before { background: #16875d; }
+.mm-status[data-state=pending]::before, .mm-status[data-state=failed]::before { background: #b87520; }
+.mm-feedback { margin: 0; padding: 0 20px; line-height: 1.6; overflow-wrap: anywhere; }
+.mm-feedback:not(:empty) { padding-top: 10px; padding-bottom: 10px; }
+.mm-feedback[data-error=true] { color: var(--admin-danger, #ba3748); }
+.mm-empty { padding: 30px 20px !important; text-align: center; color: var(--mm-muted); }
+.mm-note, .mm-dialog small { color: var(--mm-muted); font-size: 12px; line-height: 1.6; }
+.model-management > div > .mm-note { margin: 8px 20px 18px; }
+.mm-legacy { margin: 16px 20px; font-size: 12px; }
+.mm-legacy summary, .mm-advanced summary, .mm-binding summary { cursor: pointer; padding: 8px 0; }
+.mm-legacy ul { padding-left: 20px; line-height: 1.8; }
+.mm-dialog { width: min(620px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 0; border: 1px solid var(--admin-line-strong); border-radius: 10px; background: var(--admin-surface); overflow: auto; }
+.mm-dialog::backdrop { background: rgb(0 0 0 / .45); }
+.mm-dialog > form { margin: 0; }
+.mm-dialog :is(header,footer) { display: flex; align-items: center; gap: 10px; padding: 16px 22px; background: var(--admin-surface); position: sticky; z-index: 1; }
+.mm-dialog header { top: 0; border-bottom: 1px solid var(--admin-line); justify-content: space-between; }
+.mm-dialog header h3 { margin: 0; font-size: 17px; }
+.mm-dialog header p { margin: 5px 0 0; color: var(--mm-muted); font-size: 12px; }
+.mm-dialog header > button { width: 32px; font-size: 22px; border: 0; background: transparent; color: inherit; }
+.mm-dialog footer { bottom: 0; border-top: 1px solid var(--admin-line); justify-content: flex-end; flex-wrap: wrap; }
+.mm-dialog footer button { padding: 6px 12px; }
+.mm-dialog-body { display: grid; gap: 16px; padding: 22px; }
+.mm-dialog-body > label, .mm-fields > label { display: grid; gap: 6px; font-weight: 500; }
+.mm-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.mm-fields input, .mm-fields select { width: 100%; min-width: 0; }
+.mm-check { display: flex !important; flex-direction: row; align-items: center; gap: 8px !important; }
+.mm-dialog input[type=checkbox] { min-height: 16px; width: 16px; height: 16px; padding: 0; accent-color: var(--admin-accent, #5475e8); }
+.mm-advanced { border-top: 1px solid var(--admin-line); border-bottom: 1px solid var(--admin-line); padding: 4px 0; }
+.mm-advanced[open] > div { padding: 10px 0; }
+.mm-inline-actions, .mm-section-head { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.mm-inline-actions { justify-content: flex-start; }
+.mm-discovery-list { max-height: 280px; overflow-y: auto; border-block: 1px solid var(--admin-line); }
+.mm-discovery-list > label { display: flex; align-items: flex-start; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--admin-line); }
+.mm-discovery-list > label:last-child { border-bottom: 0; }
+.mm-discovery-list > label > span { overflow-wrap: anywhere; }
+.mm-discovery-list small { display: block; }
+.mm-dialog [data-mm-discovery] .mm-toolbar { padding: 0 0 10px; }
+.mm-model-dialog { width: min(850px, calc(100vw - 32px)); }
+.mm-model-dialog .mm-section { border-top: 1px solid var(--admin-line); padding-top: 14px; }
+.mm-section h4 { margin: 0; font-size: 14px; }
+.mm-section h4 small { margin-left: 6px; font-weight: 400; }
+.mm-price-row { display: grid; grid-template-columns: minmax(100px,1fr) minmax(90px,1fr) minmax(80px,120px); gap: 12px; align-items: center; padding: 8px 0; }
+.mm-price-row input { width: 100%; }
+.mm-binding { padding: 10px 0; border-bottom: 1px solid var(--admin-line); }
+.mm-binding-top { display: grid; grid-template-columns: minmax(120px,1fr) 105px 70px; gap: 14px; align-items: center; }
+.mm-binding-top label { display: grid; gap: 5px; }
+.mm-binding-top small { display: block; margin-top: 4px; }
+.mm-binding .mm-fields { padding-block: 10px; }
+.mm-model-status { font-size: 12px; line-height: 1.7; }
+.mm-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 16px 20px; }
+.mm-detail-list { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 10px 16px; margin: 0; }
+.mm-detail-list dt { color: var(--mm-muted); }
+.mm-detail-list dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.mm-preview-row { padding: 10px 0; border-bottom: 1px solid var(--admin-line); line-height: 1.6; }
+.mm-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 760px) {
+  .model-management .mm-table thead { display: table-header-group; }
+  .model-management .mm-table tbody { display: table-row-group; }
+  .model-management .mm-table tr { display: table-row; }
+  .model-management .mm-table td { display: table-cell; }
+  .model-management .mm-table td::before { display: none; }
+  .mm-toolbar { padding: 12px; }
+  .mm-tabs { padding-inline: 12px; gap: 20px; }
+  .mm-dialog-body { padding: 16px; }
+  .mm-dialog :is(header,footer) { padding: 12px 16px; }
+}
+@media (max-width: 480px) {
+  .mm-fields { grid-template-columns: 1fr; }
+  .mm-binding-top { grid-template-columns: minmax(0,1fr) 80px 60px; gap: 8px; }
+  .mm-toolbar > button:last-child { margin-left: 0; }
+  .mm-price-row { gap: 6px; grid-template-columns: minmax(70px,1fr) minmax(70px,1fr) 90px; }
+}

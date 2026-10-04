@@ -1,0 +1,123 @@
+.admin-console-page .settings-console-form > .settings-section-index {
+  position: sticky;
+  top: 12px;
+  z-index: 4;
+  display: flex;
+  grid-template-columns: none;
+  gap: 4px;
+  margin: 0 0 18px;
+  padding: 5px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.admin-console-page .settings-console-form > .settings-section-index a {
+  min-height: 32px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 12px;
+}
+
+.admin-console-page .settings-table-filter {
+  flex: 0 1 250px;
+}
+
+.admin-console-page .settings-table-head {
+  align-items: flex-start;
+}
+
+.admin-console-page .settings-table-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: flex-end;
+}
+
+.admin-console-page .settings-table-actions > button,
+.admin-console-page .settings-table-actions > form button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.admin-console-page .provider-config-table th:nth-child(9) {
+  width: 18%;
+  min-width: 190px;
+}
+
+.admin-console-page .provider-config-table .config-row-actions {
+  flex-wrap: nowrap;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.admin-console-page .provider-config-table .config-row-actions form {
+  display: contents;
+}
+
+.admin-console-page .provider-config-table .config-row-actions button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.admin-console-page .provider-config-table .config-row-actions select {
+  width: 112px;
+  min-height: 36px;
+  padding: 0 7px;
+  border: 1px solid var(--admin-line-strong);
+  border-radius: 5px;
+  background: var(--admin-surface);
+  color: var(--admin-ink);
+  font: inherit;
+  font-size: 11px;
+}
+
+.admin-console-page .provider-test-dialog {
+  width: min(460px, calc(100vw - 28px));
+}
+
+.admin-console-page .provider-test-fields {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.admin-console-page .provider-test-hint {
+  margin: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--admin-line);
+  border-radius: 5px;
+  background: var(--admin-soft);
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.admin-console-page .provider-test-model-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.admin-console-page [data-model-fetch-status] { min-height: 18px; color: var(--admin-muted); }
+.admin-console-page .provider-test-result { min-height: 20px; margin: 0; font-size: 12px; }
+.admin-console-page .provider-test-result.is-running { color: var(--admin-muted); }
+.admin-console-page .provider-test-result.is-ok { color: var(--admin-ok); }
+.admin-console-page .provider-test-result.is-error { color: var(--admin-danger); }
+.admin-console-page .provider-test-image { display: block; width: min(100%, 260px); margin-top: 10px; border-radius: 6px; }
+.admin-console-page .provider-test-video { display: block; width: min(100%, 360px); max-height: 220px; margin-top: 10px; border-radius: 6px; background: #0b0f18; }
+.admin-console-page .provider-test-audio { display: block; width: min(100%, 360px); margin-top: 10px; }
+.admin-console-page .provider-test-text { margin: 10px 0 0; padding: 9px 10px; border-left: 3px solid var(--admin-ok); background: var(--admin-soft); color: var(--admin-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.admin-console-page .provider-test-pending { display: block; margin-top: 9px; color: var(--admin-muted); }
+.admin-console-page .provider-model-editor-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.admin-console-page [data-model-fetch-editor-status] { color: var(--admin-muted); font-size: 11px; }
+
+@media (max-width: 760px) {
+  .admin-console-page .settings-console-form > .settings-section-index {
+    position: static;
+  }
+  .admin-console-page .settings-table-filter {
+    flex-basis: 100%;
+  }
+  .admin-console-page .settings-table-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .admin-console-page .provider-config-table .config-row-actions {
+    flex-wrap: wrap;
+  }
+}

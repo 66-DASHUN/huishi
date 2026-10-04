@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}绘世 - AI 视觉创作空间{% endblock %}
+{% block meta_description %}绘世提供 AI 视觉创作工作流，支持提示词、参考图、参数复用、资产归档和画布协作。{% endblock %}
+{% block body_class %}home-page{% endblock %}
+{% block site_styles %}{% endblock %}
+{% block font_styles %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+{% endblock %}
+{% block head %}
+  <meta name="theme-color" content="#0b416b">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/home-tailwind.css', v='20260830-workflow-video-3') }}">
+{% endblock %}
+{% block content %}
+<div id="root"></div>
+{% endblock %}
+{% block scripts %}
+<script>window.__HUISHI_CANVAS_URL__ = {{ canvas_app_url|tojson }};</script>
+<script>window.__HUISHI_CSRF_TOKEN__ = {{ csrf_token|tojson }};</script>
+{% if auth_intent %}
+<script>window.__HUISHI_AUTH_INTENT__ = {{ auth_intent|tojson }};</script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/home.compiled.js', v='20260830-workflow-video-3') }}"></script>
+{% endblock %}

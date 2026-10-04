@@ -1,0 +1,21 @@
+[Unit]
+Description=Huishi Infinite Canvas Next.js application
+After=network.target huishi.service
+Wants=huishi.service
+
+[Service]
+User=huishi
+Group=huishi
+WorkingDirectory=/opt/huishi/infinite-canvas/web
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+Environment=CANVAS_PARENT_ORIGINS=https://huishi.local
+ExecStart=/opt/huishi/.bun/bin/bun .next/standalone/server.js
+Restart=always
+RestartSec=5
+SuccessExitStatus=143 SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+{% extends "admin/layout.html" %}
+{% block title %}{{ user["username"] }}的业务流水 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="page-hero admin-activity-hero">
+  <span>用户业务</span>
+  <h1>{{ user["username"] }}的业务流水</h1>
+  <p>当前余额 {{ user["points"] }} 点 · 共 {{ pagination.total }} 条事件</p>
+</header>
+
+<form method="post" action="/admin/users/{{ user['id'] }}/adjust" class="admin-adjust-panel">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <strong>充值/扣费</strong>
+  <input name="delta" type="number" placeholder="正数充值，负数扣费" required>
+  <input name="admin_note" placeholder="备注">
+  <button type="submit">确认调整</button>
+</form>
+
+<form class="admin-list-toolbar admin-activity-filters" method="get">
+  <label><span class="sr-only">搜索用户业务流水</span><input type="search" name="q" value="{{ search }}" placeholder="提示词、原因、备注或记录 ID"></label>
+  <label><span class="sr-only">事件类型</span><select name="event_type"><option value="">全部事件</option>{% for value, label in event_types %}<option value="{{ value }}" {% if event_type_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span class="sr-only">生成模式</span><select name="mode"><option value="">全部模式</option>{% for mode in modes %}<option value="{{ mode }}" {% if mode_filter == mode %}selected{% endif %}>{{ mode }}</option>{% endfor %}</select></label>
+  <label><span class="sr-only">状态</span><select name="status"><option value="">全部状态</option>{% for value, label in statuses %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span class="sr-only">开始日期</span><input type="date" name="from" value="{{ from_filter }}"></label>
+  <label><span class="sr-only">结束日期</span><input type="date" name="to" value="{{ to_filter }}"></label>
+  <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
+  <button type="submit">筛选</button>
+  {% if search or event_type_filter or mode_filter or status_filter or from_filter or to_filter %}<a href="/admin/users/{{ user['id'] }}/ledger">清除</a>{% endif %}
+</form>
+
+{% include "admin/_activity_table.html" %}
+{% with pagination=pagination, pagination_query=pagination_query, pagination_page_param="page", pagination_aria_label="用户业务流水分页" %}
+  {% include "admin/_pagination.html" %}
+{% endwith %}
+{% endblock %}

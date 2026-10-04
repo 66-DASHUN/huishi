@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="绘世">
+  <defs>
+    <radialGradient id="glow" cx="32%" cy="24%" r="78%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".78"/>
+      <stop offset=".42" stop-color="#f0dca6" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#d9b35f" stop-opacity=".10"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="12" y1="8" x2="54" y2="58">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".96"/>
+      <stop offset=".5" stop-color="#d9b35f" stop-opacity=".92"/>
+      <stop offset="1" stop-color="#79cde2" stop-opacity=".86"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="24" fill="url(#glow)" stroke="url(#ring)" stroke-width="2.5"/>
+  <text x="32" y="43" text-anchor="middle" fill="#1a202c" font-size="34" font-family="KaiTi, STKaiti, serif" font-style="italic" font-weight="700">绘</text>
+</svg>

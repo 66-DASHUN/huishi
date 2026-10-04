@@ -1,0 +1,81 @@
+{% extends "admin/layout.html" %}
+{% block title %}套餐说明 - 绘世{% endblock %}
+{% block admin_content %}
+{% set enabled_count = packages|selectattr("enabled")|list|length %}
+<section class="config-shell config-console-shell">
+  <div class="config-content">
+    <header class="page-hero config-manage-hero">
+      <span>Packages</span>
+      <h1>套餐说明</h1>
+      <p>统一维护用户可购买的积分套餐，工作台与画布共用同一套说明与配置。计费单位固定为 1 积分 = 1 分（0.01 元）。</p>
+    </header>
+
+    <section class="config-overview-strip" aria-label="套餐概览">
+      <article>
+        <span>套餐总数</span>
+        <strong>{{ packages|length }}</strong>
+        <small>包含启用和停用的套餐</small>
+      </article>
+      <article>
+        <span>正在展示</span>
+        <strong>{{ enabled_count }}</strong>
+        <small>用户可在价格页看到</small>
+      </article>
+      <article>
+        <span>配置来源</span>
+        <strong>统一</strong>
+        <small>工作台、画布与账户页共用</small>
+      </article>
+    </section>
+
+    <form method="post" class="config-editor-card config-package-create">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="config-card-head">
+        <div>
+          <span>新增套餐</span>
+          <strong>创建一个可购买积分包</strong>
+        </div>
+        <em class="config-status-pill is-ok">默认启用</em>
+      </div>
+      <div class="config-package-fields">
+        <label><span>套餐名称</span><input name="name" placeholder="例如：标准包" required></label>
+        <label><span>价格（元）</span><input name="price" type="number" step="0.01" placeholder="9.90" required></label>
+        <label><span>积分</span><input name="points" type="number" placeholder="990" required></label>
+        <label class="config-package-description"><span>描述</span><input name="description" placeholder="适合日常创作"></label>
+        <label class="config-switch"><input name="enabled" type="checkbox" checked><span>启用套餐</span></label>
+        <button type="submit">新增</button>
+      </div>
+    </form>
+
+    <section class="config-editor-list package-editor-list" aria-label="套餐列表编辑">
+      {% for package in packages %}
+      <article class="config-editor-card package-editor-card {% if not package['enabled'] %}is-disabled{% endif %}">
+        <form method="post" action="/admin/packages/{{ package['id'] }}" class="package-edit-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="package_id" value="{{ package['id'] }}">
+          <div class="config-card-head">
+            <div>
+              <span>{{ "正在展示" if package["enabled"] else "已停用" }}</span>
+              <strong>{{ package['name'] }}</strong>
+            </div>
+            <em class="config-status-pill {{ 'is-ok' if package['enabled'] else 'is-muted' }}">{{ "启用" if package["enabled"] else "停用" }}</em>
+          </div>
+          <div class="config-package-fields">
+            <label><span>套餐名称</span><input name="name" value="{{ package['name'] }}" required aria-label="套餐名称"></label>
+            <label><span>价格（元）</span><input name="price" type="number" step="0.01" value="{{ "%.2f"|format(package["price_cents"] / 100) }}" required aria-label="价格"></label>
+            <label><span>积分</span><input name="points" type="number" value="{{ package['points'] }}" required aria-label="积分"></label>
+            <label class="config-package-description"><span>描述</span><input name="description" value="{{ package['description'] }}" aria-label="描述"></label>
+            <label class="config-switch"><input name="enabled" type="checkbox" {% if package["enabled"] %}checked{% endif %}><span>启用套餐</span></label>
+            <button type="submit">保存</button>
+          </div>
+        </form>
+        <form method="post" action="/admin/packages/{{ package['id'] }}/delete" class="package-delete-form" data-confirm-delete="删除后套餐将不再展示，确认删除？">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit">删除套餐</button>
+        </form>
+      </article>
+      {% endfor %}
+    </section>
+  </div>
+</section>
+{% endblock %}

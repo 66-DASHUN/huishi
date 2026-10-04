@@ -1,0 +1,9 @@
+.workspace-page [data-video-options][hidden] { display: none !important; }
+.workspace-page .composer [data-video-options] { position: relative; display: block; flex: 0 0 auto; height: 30px; }
+[data-video-options] > summary { cursor: pointer; line-height: 28px; white-space: nowrap; }
+.video-parameter-popover { position: absolute; bottom: calc(100% + 10px); right: 0; z-index: 95; width: min(300px, calc(100vw - 40px)); max-height: min(420px, 70vh); overflow: auto; display: grid; gap: 10px; padding: 14px; border: 1px solid var(--studio-border); border-radius: 12px; background: var(--studio-surface, var(--panel)); color: var(--studio-text, var(--ink)); box-shadow: 0 10px 30px #0002; }
+.video-parameter-popover label { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 12px; }
+.video-parameter-popover label[hidden] { display: none; }
+.video-parameter-popover small { font-size: 11px; font-weight: 400; line-height: 1.6; }
+.video-parameter-popover input[type=file] { min-width: 0; width: 100%; }
+@media(max-width: 600px) { .video-parameter-popover { position: fixed; right: 16px; bottom: 130px; } }

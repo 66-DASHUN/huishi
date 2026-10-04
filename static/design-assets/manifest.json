@@ -1,0 +1,27 @@
+{
+  "$schema": "./manifest.schema.json",
+  "version": 1,
+  "assets": {},
+  "rules": {
+    "lookup": "Use assetKey to resolve runtime image paths. Do not hard-code design asset paths in frontend components.",
+    "approvedOnly": true,
+    "keyPattern": "page.purpose or page.component.state",
+    "statusValues": ["draft", "review", "approved", "deprecated"]
+  },
+  "examples": {
+    "workspace.loading": {
+      "path": "/design-assets/workspace/loading.png",
+      "status": "approved",
+      "page": "workspace",
+      "type": "state",
+      "description": "Workspace generation loading state image"
+    },
+    "auth.login.hero": {
+      "path": "/design-assets/auth/login-hero.png",
+      "status": "approved",
+      "page": "auth",
+      "type": "hero",
+      "description": "Login page hero image"
+    }
+  }
+}

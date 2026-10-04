@@ -1,0 +1,38 @@
+<div class="admin-table-wrap admin-activity-table-wrap">
+  <table class="admin-data-table admin-activity-table">
+    <thead><tr><th>时间</th><th>用户</th><th>事件</th><th>业务详情</th><th>积分</th><th>状态</th><th>关联记录</th><th>操作</th></tr></thead>
+    <tbody>
+      {% for event in events %}
+      <tr data-activity-row data-activity="{{ event|tojson|forceescape }}">
+        <td><time>{{ event["occurred_at"] }}</time></td>
+        <td><strong>{{ event["username"] }}</strong></td>
+        <td><span class="admin-event-badge" data-event-type="{{ event['event_type'] }}">{{ event["event_label"] }}</span></td>
+        <td class="admin-record-prompt" title="{{ event['summary']|e }}">{{ event["summary"] }}</td>
+        <td><span class="admin-points-delta" data-points-direction="{% if event['points_delta'] > 0 %}credit{% elif event['points_delta'] < 0 %}debit{% else %}neutral{% endif %}">{{ "%+d"|format(event["points_delta"]) }} 点</span></td>
+        <td><span class="admin-status-badge" data-status="{{ event['status'] }}">{{ event["status_label"] }}</span></td>
+        <td>{% if event["record_id"] %}#{{ event["record_id"] }}{% else %}-{% endif %}</td>
+        <td><button type="button" class="admin-table-action" data-activity-open>查看</button></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="admin-empty">没有符合当前条件的业务流水。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="admin-drawer-backdrop" data-activity-backdrop hidden></div>
+<aside class="admin-activity-drawer" data-activity-drawer hidden tabindex="-1" aria-labelledby="activity-drawer-title">
+  <header>
+    <div><span>业务详情</span><h2 id="activity-drawer-title" data-activity-title>事件</h2></div>
+    <button type="button" data-activity-close aria-label="关闭详情">关闭</button>
+  </header>
+  <dl class="admin-activity-detail-list">
+    <div><dt>用户</dt><dd data-activity-user>-</dd></div>
+    <div><dt>时间</dt><dd data-activity-time>-</dd></div>
+    <div><dt>状态</dt><dd data-activity-status>-</dd></div>
+    <div><dt>积分</dt><dd data-activity-points>-</dd></div>
+    <div><dt>关联</dt><dd data-activity-links>-</dd></div>
+    <div><dt>参数</dt><dd data-activity-params>-</dd></div>
+    <div class="admin-activity-detail-wide"><dt>提示词 / 备注</dt><dd data-activity-summary>-</dd></div>
+  </dl>
+</aside>

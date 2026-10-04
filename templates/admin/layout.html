@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block body_class %}admin-console-page{% endblock %}
+{% block content %}
+<div class="admin-console-shell">
+  <aside class="admin-console-sidebar">
+    <a class="admin-console-brand" href="/admin/">
+      <span>绘世</span>
+      <strong>管理控制台</strong>
+    </a>
+    <nav aria-label="管理导航">
+      {% if can("operations.view") %}<a href="/admin/" {% if request.endpoint == "admin.index" %}aria-current="page"{% endif %}>运行总览</a>{% endif %}
+      {% if can("users.view") %}<a href="/admin/users" {% if request.endpoint == "admin.users" %}aria-current="page"{% endif %}>用户</a>{% endif %}
+      {% if can("records.view") %}<a href="/admin/records" {% if request.endpoint in ["admin.records", "admin.user_ledger"] %}aria-current="page"{% endif %}>业务流水</a>{% endif %}
+      {% if can("invites.view") %}<a href="/admin/invites" {% if request.endpoint and "invite" in request.endpoint %}aria-current="page"{% endif %}>邀请码</a>{% endif %}
+      {% if can("providers.view") %}
+      <div class="admin-console-config-group">
+        <a href="/admin/config/settings" {% if request.endpoint and request.endpoint.startswith("admin.config") %}aria-current="page"{% endif %}>配置中心</a>
+        <nav class="admin-console-config-links" aria-label="配置中心" data-config-nav-active="{{ config_nav_active|default('settings') }}">
+          <a href="/admin/config/settings" {% if request.endpoint == "admin.config_settings" %}aria-current="page"{% endif %}>系统配置</a>
+          {% if can("billing.view") %}<a href="/admin/config/billing" {% if request.endpoint == "admin.config_billing" %}aria-current="page"{% endif %}>计费规则</a>{% endif %}
+          {% if can("packages.view") %}<a href="/admin/config/packages" {% if request.endpoint == "admin.config_packages" %}aria-current="page"{% endif %}>套餐说明</a>{% endif %}
+        </nav>
+      </div>
+      {% endif %}
+      {% if can("audit.view") %}<a href="/admin/audit" {% if request.endpoint == "admin.audit_logs" %}aria-current="page"{% endif %}>审计日志</a>{% endif %}
+    </nav>
+    <a class="admin-console-back" href="/workspace">返回工作台</a>
+  </aside>
+  <div class="admin-console-main">
+    <header class="admin-console-topbar">
+      <span class="admin-console-environment"><i></i>生产环境</span>
+      <div class="admin-console-actions">
+        <span>{{ g.user["username"] }} · {{ g.user["role"] }}</span>
+      </div>
+    </header>
+    <main class="admin-console-content">
+      {% block admin_content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/theme.js', v='20260922-light-model-pricing-1') }}"></script>
+<script src="{{ url_for('static', filename='js/admin.js', v='20260713-regression-1') }}"></script>
+{% endblock %}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-theme-preference="system">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      (() => {
+        const values = new Set(["system", "light", "dark"]);
+        let preference = "system";
+        try {
+          const saved = localStorage.getItem("huishi.theme");
+          const legacy = localStorage.getItem("huishi.workspaceTheme");
+          if (values.has(saved)) preference = saved;
+          else if (legacy === "light" || legacy === "dark") preference = legacy;
+        } catch (error) {
+          preference = "system";
+        }
+        // The product surface is light-only. Keep the preference value for
+        // existing clients, but do not let OS or legacy dark settings paint a
+        // dark page during the first render.
+        const resolved = "light";
+        preference = "light";
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.workspaceTheme = resolved;
+        document.documentElement.dataset.themePreference = preference;
+        document.documentElement.style.colorScheme = resolved;
+      })();
+    </script>
+    <meta name="description" content="{% block meta_description %}绘世是面向 AI 视觉创作的工作台，支持提示词生成、参考图编辑、资产管理和画布复用。{% endblock %}">
+    <title>{% block title %}绘世{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg', v='20260618-light-1') }}">
+    <meta name="theme-color" content="#f4efe4">
+    {% block site_styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css', v='20260922-task-repair-1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/workspace-task-repair.css', v='20260922-subject-picker-1') }}">
+    {% endblock %}
+    {% block font_styles %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    {% endblock %}
+    {% block head %}{% endblock %}
+  </head>
+  <body class="{% block body_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

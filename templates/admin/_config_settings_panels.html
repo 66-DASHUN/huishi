@@ -1,0 +1,142 @@
+
+<form id="settings-main-form" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="storage_fields_submitted" value="1">
+</form>
+
+<div class="settings-form settings-console-form">
+  <nav class="settings-section-index" aria-label="系统配置分区">
+    <a href="#settings-image">模型渠道</a>
+    <a href="#settings-storage">图片存储</a>
+    <a href="#settings-runtime">运行配置</a>
+  </nav>
+  {% include "admin/_model_management.html" %}
+
+  <dialog class="settings-dialog" id="provider-backup" aria-labelledby="provider-backup-title">
+    <header><h3 id="provider-backup-title">备份与迁移</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <p>备份渠道、模型映射、成本与售价。恢复只新增停用渠道，价格冲突时不会导入。</p>
+    <p><a href="{{ url_for('workspace.export_provider_config') }}">导出普通配置（不含 Key 和代理凭证）</a></p>
+    <form method="post" action="{{ url_for('workspace.backup_provider_config') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>加密备份口令<input type="password" name="backup_password" minlength="12" maxlength="256" autocomplete="new-password" required></label>
+      <small>至少12个字符；口令不保存，换服务器恢复时需要同一口令。</small>
+      <button type="submit">下载加密完整备份</button>
+    </form>
+    <hr>
+    <form method="post" action="{{ url_for('workspace.restore_provider_config') }}" enctype="multipart/form-data" data-provider-restore>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>加密备份文件<input type="file" name="backup_file" accept=".json" required></label>
+      <label>恢复口令<input type="password" name="backup_password" minlength="12" maxlength="256" autocomplete="off" required></label>
+      <p data-restore-result role="status"></p>
+      <button type="submit" name="confirm" value="0">预览恢复</button>
+      <button type="submit" name="confirm" value="1" data-restore-confirm hidden>确认新增停用渠道</button>
+    </form>
+  </dialog>
+
+  {% for provider in channel_connections %}
+  <dialog class="settings-dialog provider-test-dialog" id="test-provider-{{ provider.id }}" aria-labelledby="test-provider-{{ provider.id }}-title">
+    <form method="post" action="{{ url_for('workspace.test_api_provider', provider_id=provider.id) }}" class="settings-dialog-form" data-provider-kind="{{ provider.provider_type }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="test_mode" value="generate">
+      <header><div><h3 id="test-provider-{{ provider.id }}-title">{{ '生图测试' if provider.provider_type == 'image' else ('对话测试' if provider.provider_type == 'prompt' else ('音频测试' if provider.provider_type == 'audio' else '视频测试')) }}</h3><p>{{ provider.name }} · 选择模型后开始</p></div><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+      <div class="settings-dialog-fields provider-test-fields">
+        {% set test_models = provider.models or [{'id': provider.model, 'label': provider.model}] %}
+        <label class="settings-dialog-wide"><span>测试模型</span><div class="provider-test-model-row"><select name="test_model" data-test-model data-catalog='{{ test_models|tojson }}' required>{% for option in test_models %}<option value="{{ option.id }}" {% if option.id == provider.model %}selected{% endif %}>{{ option.label or option.id }}</option>{% endfor %}</select><button type="button" data-fetch-models="{{ provider.id }}">获取模型列表</button></div><small data-model-fetch-status></small></label>
+        {% if provider.provider_type in ('video','mixed') %}
+        <div class="settings-dialog-wide settings-dialog-fields" data-video-test-fields>
+        <label class="settings-dialog-wide"><span>测试提示词</span><input name="test_prompt" value="A paper boat moving gently on calm water" required></label>
+        <label data-test-duration-select-wrap><span>时长（秒）</span><select name="test_duration" data-test-duration-select><option value="6">6</option></select></label>
+        <label class="settings-dialog-wide" data-test-duration-range hidden><span>时长 <output data-test-duration-output>6 秒</output></span><input type="range" min="1" max="20" step="1" value="6" data-test-duration-slider aria-label="视频时长（秒）"><input type="hidden" name="test_duration" value="6" data-test-duration-value></label>
+        <label><span>分辨率</span><select name="test_resolution"><option value="720p">720p</option></select></label>
+        <label><span>比例</span><select name="test_ratio"><option value="16:9">16:9</option></select></label>
+        <label><span>参考方式</span><select name="reference_mode"><option value="reference">参考素材</option></select></label>
+        <label data-test-camera hidden><span>镜头</span><select name="camera_movement"><option value="auto">自动</option><option value="fixed">固定</option></select></label>
+        <label class="settings-dialog-wide"><span>参考素材（可选）</span><input name="media_references" type="file" multiple accept="image/*"><small data-test-reference-hint>不上传即为文生视频。</small></label>
+        </div>
+        {% endif %}
+        <p class="provider-test-hint settings-dialog-wide">{% if provider.provider_type == 'image' %}将实际生成 1 张 1K 测试图片。{% elif provider.provider_type == 'prompt' %}将发送一条简短测试消息并验证回复。{% elif provider.provider_type == 'audio' %}将使用选中的模型生成一段测试音频。{% else %}将真实生成视频，产生渠道费用；保存完成后在此播放。关闭窗口不会取消生成。{% endif %}</p>
+        <p class="provider-test-result settings-dialog-wide" data-test-result role="status" aria-live="polite"></p>
+      </div>
+      <footer><button type="button" data-dialog-close>取消</button><button type="submit" class="settings-submit">开始测试</button></footer>
+    </form>
+  </dialog>
+  {% endfor %}
+
+  <section class="settings-table-section" id="settings-storage" aria-labelledby="storage-table-title">
+    <header class="settings-table-head">
+      <div><h2 id="storage-table-title">图片存储</h2><p>本地目录作为缓存；启用远端后由 S3、R2 或 OSS 提供持久化。</p></div>
+      <div class="settings-table-actions">
+        <button type="button" data-dialog-open="storage-edit">编辑</button>
+        <form method="post" action="{{ url_for('admin.config_storage_test') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">测试</button></form>
+        <form method="post" action="{{ url_for('admin.config_storage_sync') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" {% if storage_settings.mode == 'local' %}disabled{% endif %}>同步</button></form>
+        <form method="post" action="{{ url_for('admin.config_storage_compare') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" {% if storage_settings.mode == 'local' %}disabled{% endif %}>比较</button></form>
+        <form method="post" action="{{ url_for('admin.config_storage_restore') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" {% if storage_settings.mode == 'local' %}disabled{% endif %}>恢复</button></form>
+      </div>
+    </header>
+    <div class="config-table-scroll">
+      <table class="config-table storage-config-table">
+        <thead><tr><th>配置项</th><th>当前值</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td data-label="配置项">存储模式</td><td data-label="当前值">{{ storage_settings.mode|upper }}</td><td data-label="状态"><span class="config-status-dot is-ok"></span>{{ '本地缓存' if storage_settings.mode == 'local' else '远端持久化' }}</td></tr>
+          <tr><td data-label="配置项">本地目录</td><td data-label="当前值"><code>{{ storage_settings.local_dir }}</code></td><td data-label="状态">项目目录</td></tr>
+          <tr><td data-label="配置项">Bucket</td><td data-label="当前值">{{ storage_settings.bucket or '不适用' }}</td><td data-label="状态">{{ '已配置' if storage_settings.bucket else '未配置' }}</td></tr>
+          <tr><td data-label="配置项">Endpoint / Region</td><td data-label="当前值">{{ storage_settings.endpoint_url or storage_settings.region or '默认' }}</td><td data-label="状态">{{ storage_settings.mode|upper }}</td></tr>
+          <tr><td data-label="配置项">对象前缀</td><td data-label="当前值"><code>{{ storage_settings.prefix }}</code></td><td data-label="状态">已启用</td></tr>
+          <tr><td data-label="配置项">访问凭据</td><td data-label="当前值">{% if storage_settings.has_access_key_id and storage_settings.has_secret_access_key %}已保存{% else %}未配置{% endif %}</td><td data-label="状态">{% if storage_settings.has_access_key_id %}{{ storage_settings.masked_access_key_id }}{% else %}本地模式无需凭据{% endif %}</td></tr>
+          <tr><td data-label="配置项">最近检测</td><td data-label="当前值" class="config-wrap">{{ storage_settings.last_health }}</td><td data-label="状态">连接状态</td></tr>
+          <tr><td data-label="配置项">最近同步</td><td data-label="当前值" class="config-wrap">{{ storage_settings.last_sync }}</td><td data-label="状态">同步状态</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="settings-table-section" id="settings-runtime" aria-labelledby="runtime-table-title">
+    <header class="settings-table-head"><div><h2 id="runtime-table-title">运行配置</h2><p>在线 Agent 由服务器服务提供；本地 Agent/MCP 仅影响当前电脑上的连接。</p></div></header>
+    <div class="config-table-scroll">
+      <table class="config-table key-value-config-table">
+        <thead><tr><th>分组</th><th>配置项</th><th>值</th></tr></thead>
+        <tbody data-runtime-group="billing-canvas" aria-label="计费与画布">
+          <tr class="config-table-group-title"><th colspan="3" scope="rowgroup">计费与画布</th></tr>
+          <tr id="settings-user-key"><td data-label="分组">计费</td><td data-label="配置项">用户自备 API Key</td><td data-label="值"><input form="settings-main-form" type="hidden" name="user_key_enabled_submitted" value="1"><label class="config-check"><input form="settings-main-form" type="checkbox" name="user_key_enabled" value="1" {% if user_key_enabled %}checked{% endif %}> 允许用户配置自己的 Key</label></td></tr>
+          <tr id="settings-canvas"><td data-label="分组">画布入口</td><td data-label="配置项">画布应用地址</td><td data-label="值"><input form="settings-main-form" name="canvas_app_url" value="{{ canvas_settings.get('canvas_app_url', '') }}" placeholder="http://127.0.0.1:3000"></td></tr>
+          <tr><td data-label="分组">画布入口</td><td data-label="配置项">画布生成配置</td><td data-label="值"><a href="#settings-image">模型与在线助手</a> · <a href="{{ url_for('admin.config_billing') }}">计费规则</a></td></tr>
+          <tr><td data-label="分组">画布入口</td><td data-label="配置项">默认模板</td><td data-label="值"><textarea form="settings-main-form" name="canvas_default_template" rows="3">{{ canvas_settings.get('canvas_default_template', '') }}</textarea></td></tr>
+        </tbody>
+        <tbody data-runtime-group="agent" aria-label="Agent">
+          <tr class="config-table-group-title"><th colspan="3" scope="rowgroup">Agent</th></tr>
+          <tr id="settings-online-agent"><td data-label="分组">在线 Agent（服务器）</td><td data-label="配置项">在线助手连接</td><td data-label="值"><span class="config-readonly-value">{{ '已启用' if canvas_diagnostics.online_agent_ready else '依赖画布地址和文本 Provider' }}</span><small>在线助手使用服务器上的文本 Provider；在线 Agent 不读取这里的本地地址或 Token。</small></td></tr>
+          <tr id="settings-local-agent"><td data-label="分组">本地 Agent/MCP（本机）</td><td data-label="配置项">本地 Agent 连接（本地 Agent/MCP 地址）</td><td data-label="值"><input form="settings-main-form" name="canvas_agent_url" value="{{ canvas_settings.get('canvas_agent_url', '') }}" placeholder="http://127.0.0.1:17371"><small>仅浏览器本机连接使用；不会改变服务器在线助手。</small></td></tr>
+          <tr><td data-label="分组">本地 Agent/MCP（本机）</td><td data-label="配置项">Agent Token</td><td data-label="值"><input form="settings-main-form" name="canvas_agent_token" type="password" value="" autocomplete="off" placeholder="留空则保持已保存值"></td></tr>
+          <tr><td data-label="分组">本地 Agent/MCP（本机）</td><td data-label="配置项">本地启动参数</td><td data-label="值"><textarea form="settings-main-form" name="canvas_local_start_cmd" rows="2">{{ canvas_settings.get('canvas_local_start_cmd', '') }}</textarea><form method="post" action="{{ url_for('admin.config_settings_diagnostics') }}" class="config-inline-action"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">运行诊断</button></form></td></tr>
+        </tbody>
+        <tbody data-runtime-group="mail" aria-label="邮件">
+          <tr class="config-table-group-title"><th colspan="3" scope="rowgroup">邮件</th></tr>
+          <tr id="settings-smtp"><td data-label="分组">邮件</td><td data-label="配置项">SMTP 主机 / 端口</td><td data-label="值" class="config-field-pair"><input form="settings-main-form" name="smtp_host" value="{{ smtp_form_values.host }}" placeholder="smtp.example.com"><input form="settings-main-form" name="smtp_port" value="{{ smtp_form_values.port }}" inputmode="numeric" placeholder="465"></td></tr>
+          <tr><td data-label="分组">邮件</td><td data-label="配置项">SMTP 用户 / 发件邮箱</td><td data-label="值" class="config-field-pair"><input form="settings-main-form" name="smtp_user" value="{{ smtp_form_values.user }}"><input form="settings-main-form" name="smtp_from" value="{{ smtp_form_values.from }}"></td></tr>
+          <tr><td data-label="分组">邮件</td><td data-label="配置项">SMTP 密码</td><td data-label="值"><input form="settings-main-form" name="smtp_password" type="password" value="" autocomplete="off" placeholder="{% if has_smtp_password %}已保存，留空保持{% else %}输入邮箱授权码{% endif %}">{% if has_saved_smtp_password %}<label class="config-check"><input form="settings-main-form" type="checkbox" name="clear_smtp_password" value="1"> 清除已保存密码</label>{% endif %}</td></tr>
+          <tr><td data-label="分组">邮件</td><td data-label="配置项">连接方式</td><td data-label="值"><label class="config-check"><input form="settings-main-form" type="checkbox" name="smtp_ssl" value="1" {% if smtp_form_values.ssl %}checked{% endif %}> SSL</label><label class="config-check"><input form="settings-main-form" type="checkbox" name="smtp_tls" value="1" {% if smtp_form_values.tls %}checked{% endif %}> STARTTLS</label></td></tr>
+          <tr><td data-label="分组">邮件</td><td data-label="配置项">告警邮箱</td><td data-label="值"><textarea form="settings-main-form" name="alert_emails" rows="2" placeholder="admin@example.com">{{ alert_emails }}</textarea></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <footer class="settings-save-row"><span>Provider 在各自编辑窗口中单独保存。</span><button form="settings-main-form" type="submit" class="settings-submit">保存系统配置</button></footer>
+  </section>
+</div>
+
+<script type="application/json" id="image-provider-catalog">{{ {'catalog': image_model_catalog, 'metadata': image_provider_metadata, 'video_catalog': video_model_catalog, 'video_metadata': video_provider_metadata, 'audio_catalog': audio_model_catalog, 'audio_metadata': audio_provider_metadata}|tojson }}</script>
+
+<dialog class="settings-dialog" id="storage-edit" aria-labelledby="storage-edit-title">
+  <div class="settings-dialog-form">
+    <header><div><h3 id="storage-edit-title">编辑图片存储</h3><p>本地始终作为缓存，远端用于持久化和跨服务器恢复。</p></div><button type="button" data-dialog-close aria-label="关闭" title="关闭">×</button></header>
+    <div class="settings-dialog-fields">
+      <label><span>存储模式</span><select form="settings-main-form" name="storage_mode"><option value="local" {% if storage_settings.mode == 'local' %}selected{% endif %}>本地</option><option value="s3" {% if storage_settings.mode == 's3' %}selected{% endif %}>AWS S3</option><option value="r2" {% if storage_settings.mode == 'r2' %}selected{% endif %}>Cloudflare R2</option><option value="oss" {% if storage_settings.mode == 'oss' %}selected{% endif %}>阿里云 OSS</option></select></label>
+      <label><span>Bucket</span><input form="settings-main-form" name="storage_bucket" value="{{ storage_settings.bucket }}"></label>
+      <label><span>Access Key ID {% if storage_settings.has_access_key_id %}<em class="key-saved">已保存</em>{% endif %}</span><input form="settings-main-form" name="storage_access_key_id" type="password" value="" autocomplete="off" placeholder="留空则保持已保存值"></label>
+      <label><span>Secret Access Key {% if storage_settings.has_secret_access_key %}<em class="key-saved">已保存</em>{% endif %}</span><input form="settings-main-form" name="storage_secret_access_key" type="password" value="" autocomplete="off" placeholder="留空则保持已保存值"></label>
+      <label class="settings-dialog-wide"><span>Endpoint</span><input form="settings-main-form" name="storage_endpoint_url" value="{{ storage_settings.endpoint_url }}" inputmode="url" placeholder="R2/OSS 必填，AWS S3 可留空"></label>
+      <label><span>Region</span><input form="settings-main-form" name="storage_region" value="{{ storage_settings.region }}" placeholder="R2 默认 auto"></label>
+      <label><span>对象前缀</span><input form="settings-main-form" name="storage_prefix" value="{{ storage_settings.prefix }}"></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button form="settings-main-form" type="submit" class="settings-submit">保存存储配置</button></footer>
+  </div>
+</dialog>

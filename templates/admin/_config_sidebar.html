@@ -1,0 +1,10 @@
+<aside class="config-subnav" data-config-nav-active="{{ config_nav_active|default('overview') }}">
+  <div class="config-subnav-card">
+    <p class="config-subnav-kicker">配置中心</p>
+    <nav class="config-subnav-links" aria-label="配置中心子导航">
+      {% for item in config_nav_sections|default([]) %}
+      <a href="{{ item.href }}" class="{% if (config_nav_active|default('overview')) == item.key %}is-active{% endif %}">{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+</aside>

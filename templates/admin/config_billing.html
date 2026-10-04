@@ -1,0 +1,28 @@
+{% extends "admin/layout.html" %}
+{% block title %}计费规则 - 绘世{% endblock %}
+{% block admin_content %}
+<section class="config-shell config-console-shell">
+  <div class="config-content">
+    <header class="page-hero config-manage-hero">
+      <h1>模型定价</h1>
+      <p>工作台与画布共用模型级定价。1 积分 = 1 分（0.01 元）；未配置明确价格的模型不会进入可用候选。</p>
+    </header>
+
+    <section class="config-editor-list" aria-label="视频模型定价">
+      <h2>视频模型定价</h2>
+      <p>H3 和 Grok 视频按实际秒数计费；Seedance 按模型、分辨率和每条价格计费。新模型未定价时不可生成。</p>
+      <p><a href="{{ url_for('admin.config_settings') }}#models">进入模型与定价，选择模型后配置支持的规格</a></p>
+      <p class="config-note">按秒规则按实际时长计费；按条规则可设置不限时长，或设置“≤N 秒/条”的时长上限。模型能力中的可用时长仍会限制实际生成范围。</p>
+      <div class="config-table-scroll"><table class="config-table"><thead><tr><th>模型</th><th>分辨率</th><th>计费方式</th><th>时长上限</th><th>积分</th><th>启用</th><th>操作</th></tr></thead><tbody>
+      {% for rule in video_rules %}{% set fid='video-price-' ~ rule.id %}<tr>
+        <td>{{ rule.model }}</td><td>{{ rule.resolution }}</td><td>{{ '按秒' if rule.billing_unit=='per_second' else '按条' }}</td><td>{% if rule.billing_unit=='per_second' %}—{% elif rule.duration_seconds == 0 %}不限时长{% else %}≤{{ rule.duration_seconds }} 秒/条{% endif %}</td>
+        <td><input form="{{ fid }}" name="points" type="number" min="1" value="{{ rule.points }}" aria-label="积分"></td>
+        <td><input form="{{ fid }}" name="enabled" type="checkbox" {% if rule.enabled %}checked{% endif %} aria-label="启用"></td>
+        <td><form method="post" id="{{ fid }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="video_price"><input type="hidden" name="model" value="{{ rule.model }}"><input type="hidden" name="resolution" value="{{ rule.resolution }}"><input type="hidden" name="billing_unit" value="{{ rule.billing_unit }}"><input type="hidden" name="duration_seconds" value="{{ rule.duration_seconds }}"><button type="submit">保存</button></form></td>
+      </tr>{% else %}<tr><td colspan="7">尚未设置视频模型定价</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+    <p class="config-note">图片、音频和已上架模型的完整价格请在<a href="{{ url_for('admin.config_settings') }}#models">模型与定价</a>中维护；此页仅保留视频规格的快速查看与编辑。</p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,80 @@
+/* Compact composer and legible task outcomes. */
+.workspace-page .composer .composer-controls { gap: 6px; }
+.workspace-page .composer:not(.is-collapsed) { padding: 12px 14px; border-radius: 16px; box-shadow: 0 4px 8px rgba(30,41,59,.05); }
+.workspace-page .composer:not(.is-collapsed) .composer-prompt { border: 0; background: transparent; box-shadow: none; padding: 8px 42px 28px 78px; font-size: 14px; line-height: 1.65; min-height: 100px; }
+.workspace-page .composer .composer-prompt::placeholder { color: #64748b; }
+.workspace-page .composer .reference-add-copy { display: none; }
+.workspace-page .composer .reference-material-stack.is-empty { width: 52px; min-width: 52px; height: 52px; }
+.workspace-page .composer .reference-material-stack.is-empty .reference-add-card { width: 48px; height: 48px; padding: 0; display: grid; place-items: center; border: 1px dashed #b7c5d5; border-radius: 8px; transform: none; box-shadow: none; }
+.workspace-page .composer .generation-mode-trigger { border: 0; background: transparent; padding: 0 8px; color: #2563eb; font-weight: 500; }
+.workspace-page .composer .generation-mode-trigger-icon { display: none; }
+.workspace-page .composer .optimize-button { font-size: 0; width: 34px; min-width: 34px; padding: 0; border: 0; background: transparent; }
+.workspace-page .composer .optimize-button > span { font-size: 19px; }
+.workspace-page .composer .composer-model-control {
+  flex: 0 1 190px; grid-template-columns: minmax(0,1fr); border: 0; background: transparent; font-weight: 500;
+}
+.workspace-page .composer .composer-model-control > span { display: none; }
+.workspace-page .composer .composer-model-control select { font-size: 13px; font-weight: 500; }
+.workspace-page .composer .video-toolbar-trigger {
+  border: 0; background: transparent !important; font-size: 13px; font-weight: 500; padding: 0 8px;
+}
+.workspace-page .composer .video-toolbar-trigger[aria-expanded="true"] { background: #eef2f6 !important; }
+.workspace-page .composer .video-subject-trigger .video-toolbar-chevron { display: none; }
+.workspace-page .composer .video-subject-label { display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-page .composer .video-subject-label[hidden] { display: none; }
+.workspace-page .composer .video-subject-at { font-size: 19px; color: #334155; }
+.workspace-page .composer .generate-button { min-width: 42px; width: 42px; height: 42px; padding: 0; border-radius: 50%; flex: 0 0 42px; }
+.workspace-page .composer .generate-icon { display: inline; font-size: 25px; }
+.workspace-page .composer .generate-text { display: none; }
+.workspace-page #video-reference-panel { padding: 6px; border-radius: 10px; }
+.workspace-page #video-reference-panel > .popover-title { display: none; }
+.workspace-page .video-reference-grid { padding: 0; margin: 0; border: 0; background: transparent; gap: 2px; }
+.workspace-page .video-reference-grid button {
+  min-height: 44px; padding: 0 14px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500;
+}
+.workspace-page .video-reference-grid button.is-active { background: #eef2f6 !important; color: #1f2937 !important; }
+.workspace-page .video-reference-grid button.is-active::after { content: '✓'; font-size: 18px; }
+.workspace-page .video-reference-grid button:disabled { opacity: 1; color: #64748b !important; }
+.workspace-page .video-reference-grid button.is-disabled,
+.workspace-page .video-reference-grid button:disabled { display: flex !important; cursor: not-allowed; background: transparent !important; }
+.workspace-page .video-reference-grid button:disabled::after { content: '暂不支持'; font-size: 11px; font-weight: 400; }
+.workspace-page .video-reference-grid button { justify-content: space-between; gap: 12px; }
+.workspace-page .subject-popover .subject-item { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px; min-height: 56px; border: 0; border-radius: 6px; background: transparent; color: #1f2937; }
+.workspace-page .subject-popover .subject-item:hover,
+.workspace-page .subject-popover .subject-item:focus-visible,
+.workspace-page .subject-popover .subject-item.is-active { background: #f1f5f9; }
+.workspace-page .subject-popover .subject-file-preview { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 6px; overflow: hidden; }
+.workspace-page .subject-popover .subject-file-preview img { width: 100%; height: 100%; object-fit: cover; }
+.workspace-page .subject-popover .subject-item-copy { min-width: 0; }
+.workspace-page .subject-popover .subject-file-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 205px; font-weight: 500; }
+.workspace-page .subject-popover .subject-list { max-height: 250px; overflow-y: auto; }
+.reference-mode-note { display: block; padding: 8px 12px; font-size: 11px; line-height: 1.5; color: #526075; }
+.workspace-page .task-failure-panel { width: 100%; max-width: 760px; padding: 18px; border: 1px solid #e1c8c8; border-radius: 12px; background: #fff; color: #334155; }
+.workspace-page .task-error-message { color: #a52828; overflow-wrap: anywhere; }
+.workspace-page .task-failure-panel .task-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.workspace-page .task-failure-panel .task-actions button { min-height: 36px; padding: 6px 14px; border: 1px solid #dbe3ec; border-radius: 8px; background: #f8fafc; color: #334155; font: inherit; font-size: 13px; cursor: pointer; }
+.workspace-page .task-failure-panel .task-actions button:hover { border-color: #93b4ed; background: #eff6ff; }
+.workspace-page .task-failure-panel .task-actions button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.workspace-page .task-failure-detail dd { min-width: 0; overflow-wrap: anywhere; }
+.workspace-page [data-task-failure-prompt] { max-height: 5em; overflow: auto; }
+.workspace-page .generation-progress-pill { height: auto; white-space: normal; line-height: 1.6; }
+.workspace-page .generation-progress-pill > strong,
+.workspace-page .generation-progress-pill > span { display: block; }
+.workspace-page .generation-progress-pill > strong { color: #334155; font-size: 14px; }
+.workspace-page .generation-progress-pill > span { color: #526075; font-size: 12px; font-weight: 400; }
+.workspace-page .generation-progress-pill details { margin-top: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.workspace-page .generation-progress-pill summary { cursor: pointer; font-weight: 400; }
+.workspace-page .is-recovering [data-task-skeletons] { display: none !important; }
+.workspace-page .is-recovering .generation-progress-pill { display: block; padding: 12px 0; }
+.workspace-page .is-recovering .generation-progress-pill::before,
+.workspace-page .is-recovering .generation-progress-pill::after { display: none; animation: none; }
+.workspace-page .asset-subtabs { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 760px) {
+  .workspace-page .composer .composer-controls { display: flex; flex-wrap: wrap; }
+  .workspace-page .composer .composer-model-control { flex: 1 1 160px; width: auto; }
+  .workspace-page .composer .video-toolbar { flex: 1 1 auto; flex-wrap: wrap; }
+  .workspace-page .composer .video-toolbar-trigger { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-page .composer * { transition: none !important; }
+}

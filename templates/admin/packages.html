@@ -1,0 +1,38 @@
+{% extends "admin/layout.html" %}
+{% block title %}套餐管理 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="page-hero">
+  <span>套餐</span>
+  <h1>套餐管理</h1>
+  <p>维护用户可购买的积分套餐，固定按 1 积分 = 1 分（0.01 元）计价。</p>
+</header>
+<form method="post" class="admin-row">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input name="name" placeholder="套餐名称" required>
+  <input name="price" type="number" step="0.01" placeholder="价格" required>
+  <input name="points" type="number" placeholder="点数" required>
+  <input name="description" placeholder="描述">
+  <label><input name="enabled" type="checkbox" checked> 启用</label>
+  <button type="submit">新增</button>
+</form>
+<div class="table-list">
+  {% for package in packages %}
+  <div class="admin-inline-row">
+    <form method="post" action="/admin/packages/{{ package['id'] }}" class="admin-row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="package_id" value="{{ package['id'] }}">
+      <input name="name" value="{{ package['name'] }}" required aria-label="套餐名称">
+      <input name="price" type="number" step="0.01" value="{{ "%.2f"|format(package["price_cents"] / 100) }}" required aria-label="价格">
+      <input name="points" type="number" value="{{ package['points'] }}" required aria-label="点数">
+      <input name="description" value="{{ package['description'] }}" aria-label="描述">
+      <label><input name="enabled" type="checkbox" {% if package["enabled"] %}checked{% endif %}> 启用</label>
+      <button type="submit">保存</button>
+    </form>
+    <form method="post" action="/admin/packages/{{ package['id'] }}/delete" class="table-action-form compact-delete" data-confirm-delete="删除后套餐将不再展示，确认删除？">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">删除</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

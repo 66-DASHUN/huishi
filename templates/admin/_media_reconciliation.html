@@ -1,0 +1,14 @@
+{% if media_reconciliation_tasks %}
+<section class="settings-table-section" aria-labelledby="media-reconciliation-title">
+  <h2 id="media-reconciliation-title">视频任务待核对</h2>
+  <p>自动恢复已暂停，积分仍保留占用。核对原渠道后可恢复查询；不会改用其他渠道或新建生成任务。</p>
+  <div class="config-table-scroll"><table class="config-table">
+    <thead><tr><th>任务 / 用户</th><th>模型 / 渠道</th><th>上游任务号</th><th>原因</th><th>操作</th></tr></thead>
+    <tbody>{% for task in media_reconciliation_tasks %}<tr>
+      <td>{{ task.id }} / {{ task.user_id }}</td><td>{{ task.model }} / {{ task.provider_id }}</td>
+      <td>{{ task.provider_task_id or '未收到；需核对受理状态' }}</td><td>{{ task.metadata.recovery_error }}</td>
+      <td>{% if can('providers.update') %}<form method="post" action="{{ url_for('admin.resume_media_task',task_id=task.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">恢复原任务</button></form>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}

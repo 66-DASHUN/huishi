@@ -1,0 +1,46 @@
+{% extends "admin/layout.html" %}
+{% block title %}审计日志 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="admin-page-header">
+  <div><span>GOVERNANCE</span><h1>审计日志</h1></div>
+</header>
+
+<form class="admin-list-toolbar admin-audit-toolbar" method="get">
+  <label><span class="sr-only">搜索审计日志</span><input type="search" name="q" value="{{ search }}" placeholder="动作、对象或摘要"></label>
+  <label><span class="sr-only">动作</span><select name="action"><option value="">全部动作</option>{% for action in actions %}<option value="{{ action }}" {% if action_filter == action %}selected{% endif %}>{{ action_labels.get(action, action) }}</option>{% endfor %}</select></label>
+  <label><span class="sr-only">结果</span><select name="result"><option value="">全部结果</option><option value="success" {% if result_filter == "success" %}selected{% endif %}>成功</option><option value="rejected" {% if result_filter == "rejected" %}selected{% endif %}>拒绝</option><option value="failed" {% if result_filter == "failed" %}selected{% endif %}>失败</option></select></label>
+  <label><span class="sr-only">操作者</span><input name="actor" value="{{ actor_filter }}" placeholder="操作者"></label>
+  <label><span class="sr-only">开始日期</span><input type="date" name="from" value="{{ from_filter }}"></label>
+  <label><span class="sr-only">结束日期</span><input type="date" name="to" value="{{ to_filter }}"></label>
+  <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
+  <button type="submit">筛选</button>
+  {% if search or action_filter or result_filter or actor_filter or from_filter or to_filter %}<a href="/admin/audit">清除</a>{% endif %}
+</form>
+
+<div class="admin-table-wrap">
+  <table class="admin-data-table">
+    <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>结果</th><th>摘要</th><th></th></tr></thead>
+    <tbody>
+      {% for row in audit_rows %}
+      <tr>
+        <td><time>{{ row["created_at"] }}</time></td>
+        <td>{{ row["actor_username"] or "系统" }}</td>
+        <td>{{ action_labels.get(row["action"], row["action"]) }}</td>
+        <td>{{ row["target_type"] }}{% if row["target_id"] %} #{{ row["target_id"] }}{% endif %}</td>
+        <td><span class="admin-result admin-result-{{ row['result'] }}">{{ row["result"] }}</span></td>
+        <td>{{ row["summary"] or "-" }}</td>
+        <td><button type="button" class="admin-table-button" data-audit-open data-action="{{ row['action']|e }}" data-meta="{{ (row['actor_username'] or '系统')|e }} · {{ row['created_at']|e }} · {{ row['request_id']|e }}" data-before="{{ row['before_json']|e }}" data-after="{{ row['after_json']|e }}">查看</button></td>
+      </tr>
+      {% else %}<tr><td colspan="7" class="admin-empty">没有匹配的审计记录</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "admin/_pagination.html" %}
+
+<div class="admin-drawer-backdrop" data-audit-backdrop hidden></div>
+<aside class="admin-audit-drawer" data-audit-drawer hidden aria-labelledby="audit-drawer-title" tabindex="-1">
+  <header><div><span>审计详情</span><h2 id="audit-drawer-title" data-audit-title>记录</h2><small data-audit-meta></small></div><button type="button" data-audit-close aria-label="关闭">×</button></header>
+  <section><h3>变更前</h3><pre data-audit-before>{}</pre></section>
+  <section><h3>变更后</h3><pre data-audit-after>{}</pre></section>
+</aside>
+{% endblock %}

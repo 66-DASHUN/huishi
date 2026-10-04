@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}工作台 - 绘世{% endblock %}
+{% block body_class %}workspace-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/media-controls.css') }}?v=20260919-1">{% endblock %}
+{% block content %}
+<main class="studio-shell" data-studio-theme="mist" data-edit-seed='{{ edit_seed|tojson if edit_seed else "" }}'>
+  {% set active_nav = "generate" %}
+  {% include "partials/studio_nav.html" %}
+
+  <section class="studio-main">
+    <header class="empty-topbar" aria-hidden="true"></header>
+
+    <section id="generation-task-region" class="generation-task-region" aria-live="polite">
+      <template id="generation-task-template">
+        <article class="generation-task-card creation-item is-generating" data-task-state="running">
+          <p class="generation-task-prompt creation-prompt" data-task-prompt tabindex="0"></p>
+          <div class="generation-skeleton-grid creation-image-grid" data-task-skeletons>
+            <div class="generation-progress-pill">
+              <span data-task-progress></span>
+              <span class="task-spinner" aria-hidden="true"></span>
+            </div>
+          </div>
+          <div class="generation-task-toolbar creation-toolbar">
+            <div></div>
+            <footer class="generation-task-params creation-meta" data-task-params aria-label="生成参数"></footer>
+          </div>
+          <dl class="task-failure-detail" hidden>
+            <dt>提示词</dt><dd data-task-failure-prompt></dd>
+            <dt>参数</dt><dd data-task-failure-params></dd>
+            <dt>积分</dt><dd data-task-failure-cost></dd>
+          </dl>
+        </article>
+      </template>
+    </section>
+
+    {% if current_record %}
+    <section class="creation-stream" id="current-canvas" aria-live="polite">
+      {% for group in record_groups|reverse %}
+      {% set record = group['record'] %}
+      {% set group_records = group['records'] %}
+      {% set is_latest_record = loop.last %}
+      <article class="creation-item {{ 'is-featured' if loop.last else 'is-previous' }}" data-task-state="success" data-record-id="{{ record['id'] }}" data-generation-group-id="{{ record['generation_group_id'] }}" data-record-mode="{{ record['mode'] }}" data-created-index="{{ loop.revindex0 }}" data-created-at="{{ record['created_at'] }}">
+        <div class="creation-record-head">
+        {% if record["reference_paths"] %}
+        <div class="creation-reference-strip reference-material-stack" data-record-references style="--reference-expanded-width: {{ ((record['reference_paths']|length - 1) * 52 + 36) if record['reference_paths'] else 64 }}px;">
+          <div class="reference-material-list">
+            {% for reference_path in record["reference_paths"] %}
+            <button type="button" class="reference-material-tile" data-reference-preview-path="{{ reference_path }}" aria-label="查看参考图" style="--stack-index: {{ loop.index0 }};">
+              <img src="{{ reference_path }}" alt="参考图" loading="lazy" draggable="false">
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        <p class="creation-prompt" title="{{ record['prompt'] }}" tabindex="0">{{ record["prompt"] }}</p>
+        </div>
+        <div class="creation-result-frame">
+        <div class="creation-image-grid" data-image-count="{{ group_records|length }}">
+          {% for item in group_records %}
+          <figure class="creation-image-wrap">
+            <a class="creation-image-link" href="/assets/{{ item['id'] }}?from=workspace&next={{ workspace_return_url_for_dialogue(item['dialogue_id'])|urlencode }}" data-detail-link aria-label="查看参数">
+              {% if item.get('media_type') == 'speech' or item.get('media_type') == 'music' %}
+              <audio {% if is_latest_record and loop.first %}id="current-audio"{% endif %} src="{{ item['image_path'] }}" controls preload="metadata"></audio>
+              {% elif item.get('media_type') == 'video' %}
+              <video {% if is_latest_record and loop.first %}id="current-video"{% endif %} src="{{ item['image_path'] }}" controls preload="metadata"></video>
+              {% else %}
+              <img {% if is_latest_record and loop.first %}id="current-image"{% endif %} src="{{ item['image_path'] }}" alt="{{ item['prompt'] }}" loading="lazy" draggable="true" data-reference-path="{{ item['image_path'] }}">
+              {% endif %}
+            </a>
+          </figure>
+          {% endfor %}
+        </div>
+        <div class="creation-toolbar">
+          <div class="creation-action-group">
+            <button type="button" data-refill-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-media-type="{{ record.get('media_type', 'image') }}" data-model="{{ record.get('model_source', '') }}" data-ratio="{{ record['ratio'] }}" data-resolution="{{ record['resolution'] }}" data-actual-size="{{ record['actual_size'] }}" data-reference-paths="{{ record['reference_paths']|tojson|forceescape }}">重新编辑</button>
+            {% if record.get('media_type', 'image') == 'image' %}<button type="button" data-edit-record-images data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-media-type="image" data-model="{{ record.get('model_source', '') }}" data-ratio="{{ record['ratio'] }}" data-resolution="{{ record['resolution'] }}" data-actual-size="{{ record['actual_size'] }}" data-edit-image-paths="{{ group_records|map(attribute='image_path')|list|tojson|forceescape }}">编辑图片</button>{% endif %}
+            <button type="button" data-regenerate-record data-prompt="{{ record['prompt'] }}" data-mode="{{ record['mode'] }}" data-media-type="{{ record.get('media_type', 'image') }}" data-model="{{ record.get('model_source', '') }}" data-ratio="{{ record['ratio'] }}" data-resolution="{{ record['resolution'] }}" data-actual-size="{{ record['actual_size'] }}" data-reference-paths="{{ record['reference_paths']|tojson|forceescape }}">再次生成</button>
+            <form method="post" action="/assets/bulk/delete" data-confirm-delete="删除后不可恢复，确认删除这组图片？">
+              {% for item in group_records %}
+              <input type="hidden" name="ids" value="{{ item['id'] }}">
+              {% endfor %}
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="from" value="workspace">
+              <input type="hidden" name="next" value="/workspace?dialogue={{ active_dialogue['id'] if active_dialogue else '' }}">
+              <button type="submit" class="action-delete">删除</button>
+            </form>
+          </div>
+          <footer class="creation-meta" {% if loop.last %}id="current-meta"{% endif %} aria-label="生成参数">
+            <span>{{ record["ratio"] }}</span>
+            <span>{{ resolution_label_for_ratio(record["ratio"], record["resolution"], record["actual_size"]) }} · {{ record["actual_size"] }}</span>
+          </footer>
+        </div>
+        </div>
+      </article>
+      {% endfor %}
+    </section>
+    {% else %}
+    <section class="empty-creation-stage" id="current-canvas" aria-live="polite">
+      <h1>你好，想创作什么？</h1>
+    </section>
+    {% endif %}
+
+    {% if g.user["email"] and not g.user["email_verified"] and g.user["role"] != "admin" %}
+    <p class="generation-status is-error" id="generation-status" aria-live="polite">
+      请先完成邮箱验证后再生成图片，<a href="/verify-email">去输入验证码</a>。
+    </p>
+    {% else %}
+    <p class="generation-status" id="generation-status" aria-live="polite"></p>
+    {% endif %}
+
+    <form id="composer" class="composer studio-composer {{ 'is-empty-card empty-composer-card' if not current_record else 'output-composer' }}" method="post" action="/generate" enctype="multipart/form-data" novalidate
+          data-size-matrix='{{ size_matrix | tojson }}'
+          data-resolution-labels='{{ resolution_labels | tojson }}'
+          data-max-generation-count='{{ config.get("MAX_GENERATION_COUNT", 10) }}'
+          data-max-reference-images='{{ config.get("MAX_REFERENCE_IMAGES", 16) }}'
+          data-max-reference-bytes='{{ config.get("MAX_REFERENCE_IMAGE_BYTES", 12582912) }}'
+          data-image-models='{{ image_models|tojson }}'
+          data-video-models='{{ video_models|tojson }}'
+          data-speech-models='{{ speech_models|tojson }}'
+          data-music-models='{{ music_models|tojson }}'>
+      <div class="composer-prompt-shell">
+        <textarea class="composer-prompt" name="prompt" rows="3" maxlength="1000" placeholder="上传最多{{ config.get('MAX_REFERENCE_IMAGES', 16) }}个参考素材，输入文字或参考内容，定义精彩互动。" required>{{ edit_seed.prompt if edit_seed else "" }}</textarea>
+        <div class="prompt-meta">
+          <span data-prompt-counter>0 / 1000</span>
+          <button type="button" data-expand-prompt aria-label="展开提示词输入框">↗</button>
+        </div>
+        <div class="reference-material-stack is-empty" id="reference-material-stack" data-reference-stack>
+          <button type="button" class="reference-add-card" data-reference-add aria-label="添加素材"><span class="reference-add-mark" aria-hidden="true">+</span><span class="reference-add-copy"><span>参考内容</span><span>添加素材</span></span></button>
+          <div class="reference-material-list" id="reference-preview" data-reference-list aria-label="参考素材"></div>
+        </div>
+      </div>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="mode" id="mode" value="{{ edit_seed.mode if edit_seed else 'text' }}">
+      <input type="hidden" name="media_type" id="media-type" value="">
+      <input type="hidden" name="ratio" id="ratio" value="{{ edit_seed.ratio if edit_seed else '16:9' }}">
+      <input type="hidden" name="resolution" id="resolution" value="{{ edit_seed.resolution if edit_seed else '2K' }}">
+      <input type="hidden" name="width" id="width" value="">
+      <input type="hidden" name="height" id="height" value="">
+      <input type="hidden" name="quality" id="quality" value="{{ edit_seed.quality if edit_seed else 'auto' }}">
+      <input type="hidden" name="output_format" id="output-format" value="{{ edit_seed.output_format if edit_seed else 'png' }}">
+      <input type="hidden" name="dialogue_id" id="dialogue-id" value="{{ active_dialogue['id'] if active_dialogue else '' }}">
+      <input type="hidden" name="create_dialogue" id="create-dialogue" value="{{ 1 if is_new_creation else 0 }}">
+      <input class="reference-input" name="reference_images" id="reference-images" type="file" accept="image/png,image/jpeg,image/jpg,image/webp,.jpg,.jpeg,.png,.webp" multiple hidden>
+      <input type="hidden" name="reference_paths" id="reference-paths" value="">
+
+      <div class="composer-controls">
+        <div class="generation-mode-picker" data-generation-mode-picker data-field="generation-mode">
+          <button type="button" class="generation-mode-trigger" data-generation-mode-trigger aria-haspopup="listbox" aria-expanded="false" aria-label="选择创作类型">
+            <span class="generation-mode-trigger-icon" data-generation-mode-icon aria-hidden="true"></span>
+            <span class="generation-mode-trigger-label" data-generation-mode-label>图片生成</span>
+            <span class="generation-mode-trigger-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="generation-mode-menu" data-generation-mode-menu hidden>
+            <span class="generation-mode-menu-title">创作类型</span>
+            <div class="generation-mode-options" role="listbox" aria-label="创作类型">
+              <button type="button" role="option" data-value="image" data-label="图片生成" aria-selected="true">
+                <span class="generation-mode-option-icon generation-mode-option-icon-image" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m5.5 17 4.5-4 3 2.5 2-2 3.5 3.5"/></svg></span>
+                <span>图片生成</span><span class="generation-mode-option-check" aria-hidden="true">✓</span>
+              </button>
+              <button type="button" role="option" data-value="video" data-label="视频生成" aria-selected="false">
+                <span class="generation-mode-option-icon generation-mode-option-icon-video" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="6" width="13" height="12" rx="2"/><path d="m16.5 10 4-2v8l-4-2z"/><path d="m9 10 3 2-3 2z"/></svg></span>
+                <span>视频生成</span><span class="generation-mode-option-check" aria-hidden="true">✓</span>
+              </button>
+              <button type="button" role="option" data-value="music" data-label="音乐生成" aria-selected="false">
+                <span class="generation-mode-option-icon generation-mode-option-icon-music" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg></span>
+                <span>音乐生成</span><span class="generation-mode-option-check" aria-hidden="true">✓</span>
+              </button>
+              <button type="button" role="option" data-value="speech" data-label="语音合成" aria-selected="false">
+                <span class="generation-mode-option-icon generation-mode-option-icon-speech" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 10v4M9 7v10M13 4v16M17 8v8M21 10v4"/></svg></span>
+                <span>语音合成</span><span class="generation-mode-option-check" aria-hidden="true">✓</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <label class="composer-model-control" title="选择模型"><span data-model-kind-label>图片模型</span><select name="model" id="model" aria-label="选择图片模型">
+          {% for model in image_models %}<option value="{{ model['id'] }}">{{ model['label'] }}</option>{% else %}<option value="">暂无可用模型</option>{% endfor %}
+        </select></label>
+        <button type="button" class="parameter-trigger ratio-trigger image-only-control" data-panel-trigger="ratio-panel" aria-controls="ratio-panel" aria-expanded="false" title="画面比例与分辨率"><span aria-hidden="true">▦</span><strong id="ratio-label">16:9</strong><strong id="resolution-label">高清 2K</strong><small aria-hidden="true">⌄</small></button>
+        <div class="count-stepper image-only-control" aria-label="生成数量" title="生成数量">
+          <button type="button" data-count-step="-1" aria-label="减少数量">−</button>
+          <input name="count" type="number" min="1" max="{{ config.get('MAX_GENERATION_COUNT', 10) }}" value="{{ edit_seed.count if edit_seed else 1 }}" aria-label="生成数量">
+          <button type="button" data-count-step="1" aria-label="增加数量">+</button>
+        </div>
+        <div class="video-toolbar" data-video-toolbar hidden aria-label="视频参数">
+          <button type="button" class="video-toolbar-trigger" data-video-reference-trigger data-panel-trigger="video-reference-panel" aria-controls="video-reference-panel" aria-expanded="false">
+            <span data-video-reference-label>全能参考</span><span class="video-toolbar-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <button type="button" class="video-toolbar-trigger video-toolbar-format-trigger" data-video-format-trigger data-panel-trigger="video-format-panel" aria-controls="video-format-panel" aria-expanded="false">
+            <span data-video-format-label>16:9 · 720P</span><span class="video-toolbar-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <button type="button" class="video-toolbar-trigger" data-video-duration-trigger data-panel-trigger="video-duration-panel" aria-controls="video-duration-panel" aria-expanded="false">
+            <strong data-video-duration-label>5 秒</strong><span class="video-toolbar-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <button type="button" class="video-toolbar-trigger video-subject-trigger" data-subject-trigger data-panel-trigger="subject-panel" aria-controls="subject-panel" aria-expanded="false" aria-label="选择已上传主体">
+            <span class="video-subject-at" aria-hidden="true">@</span><span class="video-subject-label" hidden></span><span class="video-toolbar-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <input type="hidden" name="video_ratio" id="video-ratio" data-video-ratio value="16:9">
+          <input type="hidden" name="video_resolution" id="video-resolution" data-video-resolution value="720p">
+          <input type="hidden" name="duration_seconds" id="video-duration" data-video-duration value="5">
+          <input type="hidden" name="reference_mode" id="video-reference-mode" data-video-reference-mode value="reference">
+          <input type="hidden" name="video_count" id="video-count" data-video-count value="1">
+          <input type="hidden" name="subject_id" id="subject-id" data-subject-value value="">
+          <select name="camera_movement" data-video-camera hidden aria-hidden="true"><option value="auto">自动</option><option value="fixed">固定</option></select>
+          <input name="media_references" data-video-media-references type="file" multiple accept="image/*,video/*,audio/*" hidden>
+          <input data-subject-image-input type="file" multiple accept="image/*" hidden>
+          <div class="video-reference-materials" data-video-reference-materials aria-live="polite" hidden></div>
+          <small data-video-hint hidden></small>
+        </div>
+        <div class="audio-generation-options" data-audio-options hidden>
+          <label><span>音色</span><select name="voice_id"><option value="alloy">Alloy</option><option value="nova">Nova</option><option value="shimmer">Shimmer</option><option value="echo">Echo</option></select></label>
+          <label><span>格式</span><select name="audio_format"><option value="mp3">MP3</option><option value="wav">WAV</option></select></label>
+          <label><span>语速</span><input name="speed" type="number" min="0.5" max="2" step="0.05" value="1"></label>
+        </div>
+        <div class="music-generation-options" data-music-options hidden>
+          <label><span>歌词</span><input name="lyrics" type="text" maxlength="2000" placeholder="可选"></label>
+          <label class="inline-check"><input name="is_instrumental" type="checkbox" value="1"><span>纯音乐</span></label>
+        </div>
+        <button type="button" class="optimize-button" data-optimize-prompt aria-label="优化提示词" title="优化提示词"><span aria-hidden="true">✦</span>优化提示词</button>
+        <div class="composer-meter"><strong id="estimate">2 点</strong></div>
+        <button class="generate-button" type="submit" aria-label="生成作品"><span class="generate-icon" aria-hidden="true">↑</span><span class="generate-text">生成作品</span></button>
+      </div>
+
+      <div class="parameter-popover" id="ratio-panel" data-popover-width="398" hidden>
+        <span class="popover-title">选择比例</span>
+        <div class="ratio-grid" data-field="ratio">
+          <button type="button" data-value="21:9">
+            <span class="ratio-icon ratio-icon-wide" aria-hidden="true"></span>
+            <span class="ratio-text">21:9</span>
+          </button>
+          <button type="button" class="is-active" data-value="16:9">
+            <span class="ratio-icon ratio-icon-landscape" aria-hidden="true"></span>
+            <span class="ratio-text">16:9</span>
+          </button>
+          <button type="button" data-value="3:2">
+            <span class="ratio-icon ratio-icon-photo" aria-hidden="true"></span>
+            <span class="ratio-text">3:2</span>
+          </button>
+          <button type="button" data-value="4:3">
+            <span class="ratio-icon ratio-icon-squareish" aria-hidden="true"></span>
+            <span class="ratio-text">4:3</span>
+          </button>
+          <button type="button" data-value="1:1">
+            <span class="ratio-icon ratio-icon-square" aria-hidden="true"></span>
+            <span class="ratio-text">1:1</span>
+          </button>
+          <button type="button" data-value="3:4">
+            <span class="ratio-icon ratio-icon-portrait" aria-hidden="true"></span>
+            <span class="ratio-text">3:4</span>
+          </button>
+          <button type="button" data-value="2:3">
+            <span class="ratio-icon ratio-icon-tall" aria-hidden="true"></span>
+            <span class="ratio-text">2:3</span>
+          </button>
+          <button type="button" data-value="9:16">
+            <span class="ratio-icon ratio-icon-vertical" aria-hidden="true"></span>
+            <span class="ratio-text">9:16</span>
+          </button>
+        </div>
+        <span class="popover-title">选择分辨率</span>
+        <div class="resolution-grid" data-field="resolution">
+          <button type="button" data-value="1K">标准 1K</button>
+          <button type="button" class="is-active" data-value="2K">高清 2K</button>
+          <button type="button" data-value="4K">超清 4K</button>
+        </div>
+        <span class="popover-title">尺寸</span>
+        <div class="dimension-grid">
+          <label><span>W</span><input type="number" id="custom-width" class="custom-dim-input" min="16" max="3840" value="2560" placeholder="宽" aria-label="目标宽度"></label>
+          <span class="dim-link" aria-hidden="true">×</span>
+          <label><span>H</span><input type="number" id="custom-height" class="custom-dim-input" min="16" max="3840" value="1440" placeholder="高" aria-label="目标高度"></label>
+          <span>PX</span>
+        </div>
+      </div>
+      <div class="parameter-popover video-workbench-popover" id="video-reference-panel" data-popover-width="224" hidden>
+        <span class="popover-title">参考类型</span>
+        <div class="video-option-grid video-reference-grid" data-field="video-reference-mode" role="listbox" aria-label="视频参考类型">
+          <button type="button" role="option" data-value="reference" aria-selected="true"><span>全能参考</span></button>
+          <button type="button" role="option" data-value="keyframes" aria-selected="false"><span>首尾帧</span></button>
+          <button type="button" role="option" data-value="multi_frame" aria-selected="false"><span>智能多帧</span></button>
+          <button type="button" role="option" data-value="smart_edit" aria-selected="false"><span>智能编辑</span></button>
+          <button type="button" role="option" data-value="long_video" aria-selected="false"><span>超长视频</span></button>
+        </div>
+        <small class="reference-mode-note">参考类型以当前模型接口支持范围为准</small>
+      </div>
+      <div class="parameter-popover video-workbench-popover" id="video-format-panel" data-popover-width="382" hidden>
+        <div class="video-popover-section">
+          <span class="popover-title">画面比例</span>
+          <div class="video-option-grid video-ratio-grid" data-field="video-ratio" role="listbox" aria-label="视频画面比例">
+            {% for ratio in ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'] %}<button type="button" data-value="{{ ratio }}">{{ ratio }}</button>{% endfor %}
+          </div>
+        </div>
+        <div class="video-popover-section">
+          <span class="popover-title">清晰度</span>
+          <div class="video-option-grid video-resolution-grid" data-field="video-resolution" role="listbox" aria-label="视频清晰度">
+            {% for resolution in ['480p', '720p', '1080p'] %}<button type="button" data-value="{{ resolution }}">{{ resolution|upper }}</button>{% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="parameter-popover video-workbench-popover" id="video-duration-panel" data-popover-width="316" hidden>
+        <div class="video-duration-heading"><span class="popover-title">视频时长</span><strong data-video-duration-output>5 秒</strong></div>
+        <input class="video-duration-slider" type="range" min="1" max="30" step="1" value="5" data-video-duration-slider aria-label="视频时长（秒）">
+        <div class="video-duration-scale" data-video-duration-scale aria-hidden="true"><span>1 秒</span><span>15 秒</span><span>30 秒</span></div>
+      </div>
+      <div class="parameter-popover video-workbench-popover subject-popover" id="subject-panel" data-popover-width="294" hidden>
+        <span class="popover-title">选择已上传主体</span>
+        <div class="subject-empty-state" data-subject-empty>
+          <p>请先上传主体图片</p>
+          <button type="button" class="subject-create-button" data-add-subject-image>上传主体图片</button>
+        </div>
+        <div class="subject-list" data-subject-list data-subject-file hidden></div>
+      </div>
+    </form>
+  </section>
+  <dialog id="points-shortage-modal" class="confirm-modal">
+    <h2>积分不足</h2>
+    <p data-shortage-message>当前积分不足，无法开始生成。</p>
+    <div class="modal-actions">
+      <a href="/pricing">去充值</a>
+      <button type="button" data-close-shortage>取消</button>
+    </div>
+  </dialog>
+
+  <dialog id="regenerate-confirm-modal" class="confirm-modal">
+    <h2>再次生成</h2>
+    <p data-regenerate-message>再次生成会消耗积分，确认继续？</p>
+    <label><input type="checkbox" data-skip-regenerate-confirm> 不再提示</label>
+    <div class="modal-actions">
+      <button type="button" data-confirm-regenerate>确认生成</button>
+      <button type="button" data-cancel-regenerate>取消</button>
+    </div>
+  </dialog>
+
+  <dialog id="image-preview-modal" class="image-preview-modal" aria-label="图片预览">
+    <button type="button" class="image-preview-close" data-close-image-preview aria-label="关闭预览">×</button>
+    <img src="" alt="" loading="lazy" decoding="async">
+    <p data-image-preview-caption></p>
+  </dialog>
+
+  <dialog id="reference-preview-modal" class="image-preview-modal" aria-label="素材预览">
+    <button type="button" class="image-preview-close" data-close-reference-preview aria-label="关闭预览">×</button>
+    <img src="" alt="" loading="lazy" decoding="async">
+    <p data-reference-preview-caption></p>
+  </dialog>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/workspace.js', v='20261004-task-order-1') }}"></script>
+{% endblock %}

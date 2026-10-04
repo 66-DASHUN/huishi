@@ -1,0 +1,32 @@
+{% extends "admin/layout.html" %}
+{% block title %}配置中心 - 绘世{% endblock %}
+{% block admin_content %}
+<section class="config-shell">
+  <div class="config-content">
+    <header class="page-hero config-center-hero">
+      <span>Config Center</span>
+      <h1>配置中心</h1>
+      <p>统一管理系统配置、画布接入、计费规则与套餐说明。</p>
+    </header>
+    <section class="config-center-grid" aria-label="配置入口">
+      {% for section in sections %}
+      <article class="config-center-card">
+        <div>
+          <strong>{{ section.label }}</strong>
+          <span>
+            {% if section.key == 'settings' %}
+              Provider、画布、Agent 与邮件配置
+            {% elif section.key == 'billing' %}
+              工作台与画布共用的积分规则
+            {% else %}
+              用户可购买的积分套餐说明
+            {% endif %}
+          </span>
+        </div>
+        <a href="{{ section.href }}">进入</a>
+      </article>
+      {% endfor %}
+    </section>
+  </div>
+</section>
+{% endblock %}

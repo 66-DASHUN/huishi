@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}积分说明 - 绘世{% endblock %}
+{% block body_class %}console-page{% endblock %}
+{% block content %}
+<main class="simple-page pricing-page billing-public-page">
+  <nav class="simple-nav">
+    <a href="/">绘世</a>
+    <a href="/workspace">工作台</a>
+    {% if user %}<a href="/account">账户</a>{% endif %}
+  </nav>
+  <header class="page-hero">
+    <span>POINTS</span>
+    <h1>积分说明</h1>
+    <p>所有图像生成统一计费，按分辨率消耗积分。套餐仅作说明展示，开通请联系管理员。</p>
+  </header>
+  {% if user %}
+  <section class="account-balance-strip">
+    <div class="balance-info">
+      <svg class="balance-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+      <span>当前余额</span>
+      <strong class="balance-amount">{{ user["points"] }} 点</strong>
+    </div>
+    <a href="/workspace">去生成</a>
+  </section>
+  {% endif %}
+  <section class="pricing-header-row">
+    <div class="pricing-summary-unified">
+      <div class="summary-icon-circle">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </div>
+      <div>
+        <span>图像生成统一计费</span>
+        <small>按分辨率消耗积分，不分模式</small>
+      </div>
+    </div>
+  </section>
+  <section class="billing-rule-table pricing-rules" aria-label="图像生成计费规则">
+    <div class="config-table-scroll">
+      <table class="config-table pricing-rules-table">
+        <thead><tr><th>模型</th><th>清晰度</th><th>点数/张</th><th>适用范围</th></tr></thead>
+        <tbody>
+        {% for rule in rules %}
+          <tr>
+            <td data-label="模型"><strong title="{{ rule['model'] if rule['model'] != '*' else '' }}">{{ "默认（所有模型）" if rule["model"] == "*" else rule["model"]|model_label }}</strong></td>
+            <td data-label="清晰度">{{ rule["resolution"] }}</td>
+            <td data-label="点数/张"><strong>{{ rule["points_per_image"] }}</strong> 点</td>
+            <td data-label="适用范围">每张图片</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="config-empty">暂无可用计费规则</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="section-heading">
+    <h2>套餐说明</h2>
+  </section>
+  <section class="billing-package-list pricing-packages" aria-label="积分套餐说明">
+    {% for package in packages %}
+    <article class="pricing-package-card {% if loop.index == 2 %}pricing-recommended{% endif %}" aria-label="{{ package["name"] }} 套餐说明">
+      {% if loop.index == 2 %}<span class="pricing-badge">推荐</span>{% endif %}
+      <div class="pricing-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-8-8"/><path d="M20 4v8h-8"/></svg>
+      </div>
+      <strong>{{ package["name"] }}</strong>
+      <p class="pricing-points">¥{{ "%.2f"|format(package["price_cents"] / 100) }} <small>/ {{ package["points"] }} 点</small></p>
+      <span class="pricing-desc">{{ package["description"] }}</span>
+      <span class="pricing-package-status">联系管理员开通</span>
+    </article>
+    {% else %}
+    <article class="pricing-package-card" aria-label="暂无可用套餐说明">
+      <strong>暂无可用套餐</strong>
+      <span class="pricing-desc">当前仅开放计费说明，请联系管理员开通。</span>
+    </article>
+    {% endfor %}
+  </section>
+  <p class="pricing-desc">联系管理员开通套餐，或先根据计费说明规划本轮生成预算。</p>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/theme.js') }}"></script>{% endblock %}

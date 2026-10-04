@@ -1,0 +1,16 @@
+[Unit]
+Description=Huishi RQ generation worker %i
+After=network.target postgresql.service redis-server.service huishi.service
+Wants=postgresql.service redis-server.service
+
+[Service]
+User=huishi
+Group=huishi
+WorkingDirectory=/opt/huishi
+EnvironmentFile=/opt/huishi/.env
+ExecStart=/opt/huishi/.venv/bin/python worker.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

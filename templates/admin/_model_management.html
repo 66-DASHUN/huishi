@@ -1,0 +1,82 @@
+<section class="settings-table-section model-management" id="settings-image" data-model-management data-api="/admin/model-management" data-csrf="{{ csrf_token }}" aria-labelledby="model-management-title">
+  <header class="settings-table-head">
+    <div><h2 id="model-management-title">模型服务</h2><p>维护渠道连接，统一管理模型和售价。</p></div>
+    <button type="button" data-dialog-open="provider-backup">备份与迁移</button>
+  </header>
+  <nav class="mm-tabs" role="tablist" aria-label="模型服务管理">
+    <button id="mm-tab-connections" type="button" role="tab" aria-selected="true" aria-controls="mm-connections" data-mm-tab="connections">渠道连接</button>
+    <button id="mm-tab-models" type="button" role="tab" aria-selected="false" aria-controls="mm-models" tabindex="-1" data-mm-tab="models">模型与定价</button>
+    <button id="mm-tab-calls" type="button" role="tab" aria-selected="false" aria-controls="mm-calls" tabindex="-1" data-mm-tab="calls">调用记录</button>
+  </nav>
+  <p class="mm-feedback" data-mm-feedback role="status" aria-live="polite"></p>
+  <div id="mm-connections" role="tabpanel" aria-labelledby="mm-tab-connections">
+    <div class="mm-toolbar"><label class="mm-search"><span class="mm-sr-only">搜索渠道</span><input type="search" data-mm-search="connections" placeholder="搜索渠道名称或地址"></label><button type="button" class="settings-submit" data-mm-new-connection>新增渠道</button></div>
+    <div class="config-table-scroll"><table class="config-table mm-table"><thead><tr><th>渠道</th><th>接口与网络</th><th>关联模型</th><th>状态</th><th>操作</th></tr></thead><tbody data-mm-connections><tr><td colspan="5">正在读取渠道…</td></tr></tbody></table></div>
+  </div>
+  <div id="mm-models" role="tabpanel" aria-labelledby="mm-tab-models" hidden>
+    <button type="button" data-mm-provider-filter hidden></button>
+    <div class="mm-toolbar"><label class="mm-search"><span class="mm-sr-only">搜索模型</span><input type="search" data-mm-search="models" placeholder="搜索名称或调用 ID"></label><label><span class="mm-sr-only">模型类型</span><select data-mm-kind><option value="">全部类型</option><option value="image">图片生成</option><option value="video">视频生成</option><option value="speech">语音合成</option><option value="music">音乐生成</option><option value="prompt">对话</option><option value="unknown">待分类</option></select></label><label><span class="mm-sr-only">模型状态</span><select data-mm-state><option value="">全部状态</option><option value="active">已上架</option><option value="pending">待完善</option><option value="draft">草稿</option><option value="disabled">已停用</option></select></label><button type="button" data-mm-preview>调度预览</button></div>
+    <div class="config-table-scroll"><table class="config-table mm-table"><thead><tr><th>模型名称</th><th>类型</th><th>可用渠道</th><th>用户售价</th><th>状态</th><th>操作</th></tr></thead><tbody data-mm-models></tbody></table></div>
+    <p class="mm-note" data-mm-issue-summary>模型只有在渠道、能力和明确售价都满足时才会进入工作台候选。</p>
+  </div>
+  <div id="mm-calls" role="tabpanel" aria-labelledby="mm-tab-calls" hidden>
+    <div class="mm-toolbar"><label><span class="mm-sr-only">调用状态</span><select data-mm-call-state><option value="">全部状态</option><option value="queued">排队中</option><option value="running">执行中</option><option value="succeeded">成功</option><option value="failed">失败</option></select></label><button type="button" data-mm-refresh-calls>刷新记录</button><button type="button" data-mm-preview>调度预览</button></div>
+    <div class="config-table-scroll"><table class="config-table mm-table"><thead><tr><th>时间／任务</th><th>模型</th><th>实际渠道</th><th>状态／耗时</th><th>积分</th><th>详情</th></tr></thead><tbody data-mm-calls></tbody></table></div>
+    <div class="mm-pagination"><button type="button" data-mm-prev>上一页</button><span data-mm-page>第 1 页</span><button type="button" data-mm-next>下一页</button></div>
+    <p class="mm-note">历史任务未记录的渠道和耗时显示为“未记录”，不会根据当前配置推算。</p>
+  </div>
+</section>
+
+<dialog class="settings-dialog mm-dialog" id="mm-connection" aria-labelledby="mm-connection-title">
+  <form data-mm-connection-form>
+    <header><div><h3 id="mm-connection-title">新增渠道</h3><p>一组地址和 Key 可以关联多个模型。</p></div><button type="button" data-mm-close aria-label="关闭">×</button></header>
+    <div class="mm-dialog-body">
+      <label>渠道名称<input name="name" required maxlength="120" placeholder="例如：图片主渠道"></label>
+      <label>接口地址<input name="base_url" type="url" required placeholder="https://api.example.com/v1" autocomplete="off"></label>
+      <label>备用接口地址（可选）<input name="backup_base_url" type="url" autocomplete="off" placeholder="https://备用接口地址"><small>备用地址仅供管理员手动切换，不会自动故障切换或重复建单。</small></label>
+      <label>API Key<input name="api_key" type="password" autocomplete="new-password" placeholder="输入渠道提供的 Key"><small data-mm-key-hint>Key 仅保存在服务器，不返回到页面。</small></label>
+      <details class="mm-advanced"><summary>协议、代理与调用限额</summary><div class="mm-fields">
+        <label>默认接口协议<select name="api_format"><option value="openai">OpenAI 兼容</option><option value="gemini">Gemini 官方</option><option value="banana">Nano Banana（Gemini 协议）</option><option value="grok">Grok</option><option value="jiasuapi">JiasuAPI</option><option value="minimax">MiniMax</option><option value="seedance">Seedance 官方</option><option value="dmc_h3">DMC H3</option><option value="seedance_media">Seedance Media</option></select></label>
+        <label>代理地址<input name="proxy_url" type="password" autocomplete="new-password" placeholder="http(s):// 或 socks5(h)://"><small data-mm-proxy-hint>留空直连。</small></label>
+        <label class="mm-check"><input type="checkbox" name="clear_proxy">清除已保存代理</label>
+        <label>默认优先级<input name="priority" type="number" min="0" max="10000" value="100"><small>数值越小越优先，模型可以单独设置。</small></label>
+        <label>同时调用上限<input name="max_concurrency" type="number" min="1" max="10000" placeholder="使用系统上限"></label>
+        <label>每分钟请求上限<input name="rpm" type="number" min="1" max="100000" placeholder="使用系统上限"></label>
+      </div></details>
+      <label class="mm-check"><input name="enabled" type="checkbox">启用渠道</label>
+      <div class="mm-inline-actions"><button type="button" data-mm-discover>获取模型</button><button type="button" data-mm-manual-import>手动添加</button></div>
+      <p class="mm-note">获取目录不保存连接、不执行生成。新模型以草稿保存。</p>
+      <section data-mm-discovery hidden aria-label="选择需要导入的模型">
+        <div class="mm-toolbar"><input type="search" data-mm-discovery-search aria-label="搜索获取到的模型" placeholder="搜索模型"><select data-mm-discovery-kind aria-label="筛选获取到的模型类型"><option value="">全部类型</option><option value="image">图片</option><option value="video">视频</option><option value="speech">语音</option><option value="music">音乐</option><option value="prompt">对话</option><option value="unknown">待分类</option></select><button type="button" data-mm-select-visible>全选当前结果</button></div>
+        <div class="mm-discovery-list" data-mm-discovery-list></div><p class="mm-note" data-mm-selection-count>已选 0 个新模型 · 启用 0 个已有模型</p>
+      </section>
+      <div class="mm-fields" data-mm-manual hidden><label>调用模型 ID<input data-mm-manual-id maxlength="200" placeholder="供应商提供的完整 ID"></label><button type="button" data-mm-add-manual>加入待导入列表</button></div>
+      <p class="mm-feedback" data-mm-dialog-status role="status" aria-live="polite"></p>
+    </div>
+    <footer><button type="button" data-mm-close>取消</button><button type="submit" class="settings-submit">保存渠道与所选模型</button></footer>
+  </form>
+</dialog>
+
+<dialog class="settings-dialog mm-dialog mm-model-dialog" id="mm-model" aria-labelledby="mm-model-title">
+  <form data-mm-model-form>
+    <header><div><h3 id="mm-model-title">模型配置</h3><p data-mm-model-identity></p></div><button type="button" data-mm-close aria-label="关闭">×</button></header>
+    <div class="mm-dialog-body">
+      <div class="mm-fields"><label>展示名称<input name="label" required maxlength="200"></label><label>模型类型<select name="media_type"><option value="">待分类</option><option value="image">图片生成</option><option value="video">视频生成</option><option value="speech">语音合成</option><option value="music">音乐生成</option><option value="prompt">对话</option></select></label></div>
+      <div class="mm-model-status" data-mm-model-status></div>
+      <section class="mm-section"><h4>用户售价 <small>积分</small></h4><p class="mm-note">只为渠道支持的规格定价。渠道成本与用户售价分别维护。</p><div data-mm-prices></div><button type="button" data-mm-fill-prices>将第一行积分应用到当前各行</button></section>
+      <section class="mm-section"><div class="mm-section-head"><h4>渠道绑定</h4><button type="button" data-mm-add-binding>关联渠道</button></div><p class="mm-note">优先使用数值较小的渠道；只在明确未受理且允许重试时尝试备用渠道。</p><div data-mm-bindings></div></section>
+      <p class="mm-feedback" data-mm-dialog-status role="status" aria-live="polite"></p>
+    </div>
+    <footer><button type="button" data-mm-close>取消</button><button type="submit" name="publication" value="draft">保存（保持停用）</button><button type="submit" name="publication" value="active" class="settings-submit">保存并上架</button></footer>
+  </form>
+</dialog>
+
+<dialog class="settings-dialog mm-dialog" id="mm-preview" aria-labelledby="mm-preview-title">
+  <form data-mm-preview-form>
+    <header><div><h3 id="mm-preview-title">调度预览</h3><p>仅检查本地配置，不调用生成接口。</p></div><button type="button" data-mm-close aria-label="关闭">×</button></header>
+    <div class="mm-dialog-body"><label>平台模型<select name="model" required></select></label><div class="mm-fields"><label>规格<select name="resolution"></select></label><label data-mm-duration-field>时长（秒）<select name="duration_seconds"></select></label><label data-mm-ratio-field>画幅比例<select name="ratio"></select></label><label>数量<input name="count" type="number" min="1" max="4" value="1"></label></div><p class="mm-feedback" data-mm-dialog-status role="status"></p><div data-mm-preview-result></div></div>
+    <footer><button type="button" data-mm-close>关闭</button><button type="submit" class="settings-submit">预览调度</button></footer>
+  </form>
+</dialog>
+
+<dialog class="settings-dialog mm-dialog" id="mm-call-detail" aria-labelledby="mm-call-title"><header><h3 id="mm-call-title">调用详情</h3><button type="button" data-mm-close aria-label="关闭">×</button></header><div class="mm-dialog-body" data-mm-call-detail></div><footer><button type="button" data-mm-close>关闭</button></footer></dialog>

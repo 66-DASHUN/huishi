@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}画布 - 绘世{% endblock %}
+{% block body_class %}workspace-page canvas-embed-page{% endblock %}
+{% block content %}
+<main class="studio-shell">
+  {% set active_nav = "canvas" %}
+  {% set hide_studio_sidebar = true %}
+  {% include "partials/studio_nav.html" %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <section class="studio-main canvas-main">
+  {% if canvas_embed_url %}
+  <div class="canvas-frame-wrap canvas-embed-frame" data-canvas-stage>
+    <div class="canvas-loading-overlay" data-canvas-loading aria-live="polite">
+      <div class="canvas-loading-bar" data-canvas-loading-bar></div>
+      <div class="canvas-loading-body">
+        <span class="canvas-loading-spinner" aria-hidden="true"></span>
+        <p class="canvas-loading-label">画布加载中<span class="canvas-loading-dots"></span></p>
+        <p class="canvas-loading-hint" data-canvas-loading-hint hidden>加载时间较长，请稍候...</p>
+      </div>
+    </div>
+    <iframe class="canvas-frame" src="{{ canvas_embed_url }}" title="画布" loading="eager" onload="this.dataset.loaded = 'true'"></iframe>
+  </div>
+  {% else %}
+  <div class="canvas-empty-state canvas-workspace-empty">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity:.4"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8"/><path d="M8 12h6"/><path d="M8 16h4"/></svg>
+    <h1>画布尚未配置</h1>
+    <p>请先在管理后台填写画布应用地址，保存后这里会直接嵌入无限画布。</p>
+    {% if g.user["role"] == "admin" %}
+    <a class="canvas-empty-action" href="/settings#settings-canvas">前往配置</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  </section>
+</main>
+<script>
+  (() => {
+    const bridgeKey = "huishi.canvas.bridge";
+    const stage = document.querySelector("[data-canvas-stage]");
+    const frame = document.querySelector(".canvas-frame");
+    const loadingOverlay = document.querySelector("[data-canvas-loading]");
+    const loadingHint = document.querySelector("[data-canvas-loading-hint]");
+    const frameOrigin = frame ? new URL(frame.src, window.location.href).origin : "";
+    const raw = sessionStorage.getItem(bridgeKey);
+    if (!frame) return;
+
+    function postThemeToCanvas() {
+      if (!frame.contentWindow) return;
+      try {
+        const url = new URL(frame.src, window.location.href);
+        frame.contentWindow.postMessage({
+          type: "huishi-theme-change",
+          preference: document.documentElement.dataset.themePreference || "system",
+          resolvedTheme: document.documentElement.dataset.theme || "light",
+        }, url.origin);
+      } catch {
+        return;
+      }
+    }
+
+    window.addEventListener("huishi-theme-change", postThemeToCanvas);
+
+    // 5秒后显示"加载较慢"提示，15秒后显示建议刷新
+    let hintTimer = setTimeout(() => {
+      if (loadingHint) loadingHint.hidden = false;
+    }, 5000);
+    let slowTimer = setTimeout(() => {
+      if (loadingHint) loadingHint.textContent = "加载较慢，可尝试刷新页面或检查画布服务是否正常。";
+    }, 15000);
+
+    function hideLoading() {
+      clearTimeout(hintTimer);
+      clearTimeout(slowTimer);
+      if (!loadingOverlay) return;
+      loadingOverlay.classList.add("is-done");
+      setTimeout(() => {
+        if (loadingOverlay) loadingOverlay.hidden = true;
+      }, 400);
+    }
+
+    try {
+      const payload = raw ? JSON.parse(raw) : null;
+      const importAssets = async (assets) => {
+        await fetch("/api/canvas/assets/import", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "fetch",
+            "X-CSRF-Token": document.querySelector('[name="csrf_token"]')?.value || "",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({ assets }),
+        });
+      };
+      const exportListener = async (event) => {
+        if (event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
+        if ((event.data || {}).type !== "huishi-canvas-export") return;
+        const assets = Array.isArray(event.data?.payload?.assets) ? event.data.payload.assets : [];
+        if (!assets.length) return;
+        await importAssets(assets);
+      };
+      const send = () => {
+        if (!payload) return false;
+        if (!frame.contentWindow) return false;
+        frame.contentWindow.postMessage({ type: "huishi-canvas-import", payload }, "*");
+        sessionStorage.removeItem(bridgeKey);
+        window.removeEventListener("message", handleReady);
+        return true;
+      };
+      const handleReady = (event) => {
+        if (event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
+        if ((event.data || {}).type !== "huishi-canvas-ready") return;
+        postThemeToCanvas();
+        send();
+      };
+      if (payload) {
+        window.addEventListener("message", handleReady);
+      }
+      window.addEventListener("message", exportListener);
+
+      // 生成进行中时拦截导航，防止误操作中断生成
+      let isGenerating = false;
+      window.addEventListener("message", (event) => {
+        if (event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
+        if ((event.data || {}).type === "huishi-canvas-generating") {
+          isGenerating = Boolean(event.data.generating);
+        }
+      });
+      // 浏览器刷新 / 关闭 tab 时警告
+      window.addEventListener("beforeunload", (e) => {
+        if (!isGenerating) return;
+        e.preventDefault();
+        e.returnValue = "";
+      });
+      // 事件委托：拦截页面内所有可能离开画布的链接点击
+      document.addEventListener("click", (e) => {
+        if (!isGenerating) return;
+        const target = e.target instanceof Element ? e.target.closest("a[href]") : null;
+        if (!target) return;
+        const href = target instanceof HTMLAnchorElement ? target.getAttribute("href") : null;
+        if (!href || href.startsWith("#") || href === "/canvas") return;
+        if (!confirm("画布正在生成图片，离开后生成将中断。确定要离开吗？")) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+
+      // 画布就绪时隐藏加载层
+      window.addEventListener("message", (event) => {
+        if (event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
+        const type = (event.data || {}).type || "";
+        if (type === "huishi-canvas-ready" || type === "huishi-canvas-ping") {
+          hideLoading();
+        }
+      });
+
+      frame.addEventListener("load", () => {
+        postThemeToCanvas();
+        if (frame.contentWindow) frame.contentWindow.postMessage({ type: "huishi-canvas-ping" }, "*");
+        // iframe load 触发时也作为兜底隐藏（部分情况下 postMessage 事件会更早）
+        setTimeout(hideLoading, 1200);
+      }, { once: true });
+      if (frame.dataset.loaded === "true") {
+        setTimeout(hideLoading, 0);
+      }
+    } catch {
+      sessionStorage.removeItem(bridgeKey);
+      hideLoading();
+    }
+  })();
+</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+{% endblock %}

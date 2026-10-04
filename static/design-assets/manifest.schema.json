@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifest.schema.json",
+  "title": "Huishi Design Asset Manifest",
+  "type": "object",
+  "required": ["version", "assets", "rules"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["path", "status", "page", "type"],
+        "properties": {
+          "path": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "review", "approved", "deprecated"]
+          },
+          "page": { "type": "string" },
+          "type": { "type": "string" },
+          "description": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rules": {
+      "type": "object",
+      "required": ["lookup", "approvedOnly", "keyPattern", "statusValues"],
+      "properties": {
+        "lookup": { "type": "string" },
+        "approvedOnly": { "type": "boolean" },
+        "keyPattern": { "type": "string" },
+        "statusValues": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["draft", "review", "approved", "deprecated"]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "examples": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

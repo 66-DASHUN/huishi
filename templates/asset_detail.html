@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}资产详情 - 绘世{% endblock %}
+{% block body_class %}workspace-page{% endblock %}
+{% block content %}
+<main class="detail-shell asset-detail-shell" data-studio-theme="workspace">
+  <section class="detail-image">
+    <button type="button" class="image-preview-trigger" data-preview-src="{{ record['image_path'] }}" data-preview-alt="{{ record['prompt'] }}" aria-label="图片预览">
+      <img src="{{ record['image_path'] }}" alt="{{ record['prompt'] }}" loading="lazy" decoding="async">
+    </button>
+  </section>
+  <aside class="detail-panel">
+    <div class="detail-topbar">
+      <a href="{{ return_url }}">{{ return_label }}</a>
+    </div>
+    <h1>资产详情</h1>
+    <section class="detail-prompt-card" aria-label="生成提示词">
+      <span>提示词</span>
+      <p class="detail-prompt-text">{{ record["prompt"] }}</p>
+    </section>
+    <dl>
+      <dt>模式</dt>
+      <dd>{{ "文生图" if record["mode"] == "text" else "参考图生成" }}</dd>
+      <dt>比例</dt>
+      <dd>{{ record["ratio"] }}</dd>
+      <dt>实际尺寸</dt>
+      <dd>{{ record["actual_size"] }}</dd>
+      <dt>格式</dt>
+      <dd>{{ record["output_format"] }}</dd>
+      <dt>消耗积分</dt>
+      <dd>{{ record["points_charged"] }} 点</dd>
+      <dt>来源</dt>
+      <dd>{{ "画布" if record["asset_source"] == "canvas" else "主站" }}</dd>
+      <dt>生成时间</dt>
+      <dd>{{ record["created_at"] }}</dd>
+      <dt>耗时</dt>
+      <dd>{{ "%.1f"|format(record["elapsed_seconds"]) }} 秒</dd>
+    </dl>
+    <p id="generation-status" class="detail-status" aria-live="polite"></p>
+    <div class="detail-actions">
+      <div class="detail-action-group detail-action-group-primary">
+        <button type="button" data-regenerate-asset="{{ record['id'] }}" data-cost="{{ record['points_charged'] }}" data-return-next="{{ next_url }}">再次生成</button>
+        <a href="{{ record['image_path'] }}" download>下载</a>
+        <form method="post" action="/assets/{{ record['id'] }}/favorite" data-toggle-favorite>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="from" value="{{ source }}">
+          <input type="hidden" name="next" value="{{ next_url }}">
+          <button type="submit" class="favorite-button {{ 'is-favorite' if record['favorite'] else '' }}" aria-pressed="{{ 'true' if record['favorite'] else 'false' }}">
+            <span aria-hidden="true">★</span>
+            <span data-favorite-label>{{ "已收藏" if record["favorite"] else "收藏" }}</span>
+          </button>
+        </form>
+      </div>
+      <div class="detail-action-group detail-action-group-secondary">
+        <a class="button-link" href="/workspace?edit_record={{ record['id'] }}">再次编辑</a>
+        <form method="post" action="/assets/{{ record['id'] }}/delete" data-confirm-delete="删除后不可恢复，确认删除这张图片？">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="from" value="{{ source }}">
+          <input type="hidden" name="next" value="{{ next_url }}">
+          <button type="submit" class="danger-button">删除</button>
+        </form>
+      </div>
+    </div>
+  </aside>
+  <dialog id="image-preview-modal" class="image-preview-modal" aria-label="图片预览">
+    <button type="button" class="image-preview-close" data-close-image-preview aria-label="关闭预览">×</button>
+    <img src="" alt="" loading="lazy" decoding="async">
+    <p data-image-preview-caption></p>
+  </dialog>
+  <dialog id="regenerate-confirm-modal" class="confirm-modal" aria-labelledby="regenerate-confirm-title" aria-describedby="regenerate-confirm-description">
+    <h2 id="regenerate-confirm-title">再次生成</h2>
+    <p id="regenerate-confirm-description" data-regenerate-message>再次生成会消耗积分，确认继续？</p>
+    <label><input type="checkbox" data-skip-regenerate-confirm> 不再提示</label>
+    <div class="modal-actions">
+      <button type="button" data-confirm-regenerate>确认生成</button>
+      <button type="button" data-cancel-regenerate>取消</button>
+    </div>
+  </dialog>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workspace.js', v='20260922-subject-picker-1') }}"></script>
+{% endblock %}

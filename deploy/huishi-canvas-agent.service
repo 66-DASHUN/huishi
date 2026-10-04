@@ -1,0 +1,28 @@
+[Unit]
+Description=Huishi Infinite Canvas Agent
+After=network.target huishi-canvas.service
+Wants=huishi-canvas.service
+
+[Service]
+Type=simple
+User=huishi-agent
+Group=huishi-agent
+WorkingDirectory=/opt/huishi/infinite-canvas/canvas-agent
+Environment=HOME=/var/lib/huishi-agent
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PORT=17371
+ExecStart=/opt/huishi/.bun/bin/bun /opt/huishi/infinite-canvas/canvas-agent/src/index.ts
+Restart=always
+RestartSec=5
+SuccessExitStatus=143 SIGTERM
+TimeoutStopSec=30
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/huishi-agent
+
+[Install]
+WantedBy=multi-user.target
+

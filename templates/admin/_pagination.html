@@ -1,0 +1,17 @@
+{% if pagination %}
+<nav class="admin-pagination" aria-label="{{ pagination_aria_label|default('分页') }}">
+  <span>共 {{ pagination.total }} 条 · 第 {{ pagination.page }} / {{ pagination.pages }} 页</span>
+  <div>
+    {% if pagination.has_previous %}
+    <a href="?{{ pagination_query }}&{{ pagination_page_param|default('page') }}={{ pagination.page - 1 }}" rel="prev">上一页</a>
+    {% else %}
+    <span aria-disabled="true">上一页</span>
+    {% endif %}
+    {% if pagination.has_next %}
+    <a href="?{{ pagination_query }}&{{ pagination_page_param|default('page') }}={{ pagination.page + 1 }}" rel="next">下一页</a>
+    {% else %}
+    <span aria-disabled="true">下一页</span>
+    {% endif %}
+  </div>
+</nav>
+{% endif %}

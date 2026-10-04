@@ -1,0 +1,31 @@
+{% extends "admin/layout.html" %}
+{% block title %}系统配置 - 绘世{% endblock %}
+{% block site_styles %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/settings-console.css', v='20260913-ui-2') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/channel-config.css', v='20260920-2') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/model-management.css', v='20260921-1') }}">
+{% endblock %}
+{% block admin_content %}
+<section class="config-shell">
+  <div class="config-content">
+    <header class="page-hero settings-console-hero">
+      <div class="settings-hero-head">
+        <div>
+          <span>配置中心</span>
+          <h1>系统配置</h1>
+        </div>
+      </div>
+      <p>管理渠道连接、模型售价与调用记录，以及存储和运行配置。</p>
+    </header>
+
+    {% for message in get_flashed_messages() %}
+    <p class="success-message settings-flash">{{ message }}</p>
+    {% endfor %}
+
+    {% include "admin/_config_settings_panels.html" %}
+    <script src="{{ url_for('static', filename='js/settings.js', v='20260923-duration-range-1') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/model-management.js', v='20260923-duration-range-1') }}" defer></script>
+  </div>
+</section>
+{% endblock %}

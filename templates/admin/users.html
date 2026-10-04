@@ -1,0 +1,203 @@
+{% extends "admin/layout.html" %}
+{% block title %}用户管理 - 绘世{% endblock %}
+{% block admin_content %}
+{% set can_bulk_users = can("users.login_failures.reset") or can("users.delete") %}
+{% set can_edit_users = can("users.points.adjust") or can("users.login_failures.reset") or can("users.password.reset") or can("users.role.update") or can("users.status.update") or can("users.delete") %}
+{% set can_create_users = can("users.create") %}
+<header class="page-hero admin-users-hero">
+  <div>
+    <span>用户</span>
+    <h1>用户管理</h1>
+    <p>登录邮箱、昵称、余额、角色和运营动作都在同一张表里处理。</p>
+  </div>
+  <div class="admin-import-export">
+    <a href="/admin/users/export">导出用户 CSV</a>
+    {% if can_create_users %}<button type="button" data-dialog-open="admin-user-create">新增用户</button>{% endif %}
+    {% if can("users.import") %}
+    <a href="/admin/users/import-template">下载导入模板</a>
+    <form method="post" action="/admin/users/import" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input id="admin-users-csv" name="file" type="file" accept=".csv,text/csv" class="sr-only" data-admin-file-input required>
+      <label for="admin-users-csv" class="admin-file-button">选择 CSV</label>
+      <span class="admin-file-name" data-admin-file-name>未选择文件</span>
+      <button type="submit">导入 CSV</button>
+    </form>
+    {% endif %}
+  </div>
+</header>
+
+{% if can_create_users %}<dialog class="settings-dialog" id="admin-user-create" aria-labelledby="admin-user-create-title">
+  <form method="post" action="{{ url_for('admin.create_user') }}" class="settings-dialog-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <header><div><h3 id="admin-user-create-title">新增用户</h3><p>创建后可使用邮箱和初始密码直接登录。</p></div><button type="button" data-dialog-close aria-label="关闭" title="关闭">×</button></header>
+    <div class="settings-dialog-fields">
+      <label><span>用户名</span><input name="username" autocomplete="username" minlength="2" required></label>
+      <label><span>邮箱</span><input name="email" type="email" autocomplete="email" required></label>
+      <label><span>初始密码</span><input name="password" type="password" autocomplete="new-password" minlength="6" required></label>
+      <label><span>角色</span><select name="role"><option value="user" selected>普通用户</option><option value="admin">管理员</option></select></label>
+      <label><span>初始积分</span><input name="points" type="number" min="0" value="0" required></label>
+      <label class="config-check"><input name="enabled" type="checkbox" value="on" checked> 启用账号</label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button type="submit" class="settings-submit">创建用户</button></footer>
+  </form>
+</dialog>{% endif %}
+
+<form class="admin-list-toolbar" method="get">
+  <label>
+    <span class="sr-only">搜索用户</span>
+    <input type="search" name="q" value="{{ search }}" placeholder="搜索邮箱或用户名">
+  </label>
+  <label>
+    <span class="sr-only">角色筛选</span>
+    <select name="role">
+      <option value="">全部角色</option>
+      {% for role in management_roles|sort %}
+      <option value="{{ role }}" {% if role_filter == role %}selected{% endif %}>{{ role }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
+  <button type="submit">筛选</button>
+  {% if search or role_filter %}<a href="/admin/users">清除</a>{% endif %}
+</form>
+
+<div class="admin-table-wrap">
+  {% if can_bulk_users %}
+  <form id="user-bulk-form" method="post" action="/admin/users/bulk" data-bulk-user-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="admin-bulk-actions">
+      <span>批量操作</span>
+      {% if can("users.login_failures.reset") %}<button type="submit" name="action" value="reset_login_failures">重置失败次数</button>{% endif %}
+      {% if can("users.delete") %}
+      <button
+        type="submit"
+        name="action"
+        value="delete"
+        class="danger-button"
+        data-confirm-bulk="删除后不可恢复，确认删除选中的用户？"
+      >删除</button>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
+  <table class="admin-user-table admin-users-table">
+    <thead>
+      <tr>
+        {% if can_bulk_users %}<th><input type="checkbox" data-bulk-check-all aria-label="全选用户"></th>{% endif %}
+        <th>ID</th>
+        <th>用户</th>
+        <th>角色</th>
+        <th>状态</th>
+        <th>余额</th>
+        <th>最近使用时间</th>
+        <th>注册时间</th>
+        <th>流水</th>
+        {% if can_edit_users %}<th>编辑</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+      <tr
+        data-user-row
+        data-user-id="{{ user['id'] }}"
+        data-user-name="{{ user['email'] or user['username'] }}"
+        data-user-username="{{ user['username'] }}"
+        data-user-role="{{ user['role'] }}"
+        data-user-enabled="{{ '1' if user['enabled'] else '0' }}"
+        data-user-points="{{ user['points'] }}"
+        data-user-current="{{ '1' if g.user['id'] == user['id'] else '0' }}"
+      >
+        {% if can_bulk_users %}<td><input form="user-bulk-form" type="checkbox" name="user_ids[]" value="{{ user['id'] }}" data-bulk-item aria-label="选择 {{ user['username'] }}"></td>{% endif %}
+        <td>#{{ user["id"] }}</td>
+        <td class="admin-user-identity" title="{{ (user['email'] or user['username'])|e }} · {{ user['username']|e }}">
+          <strong>{{ user["email"] or user["username"] }}</strong>
+          <small>{{ user["username"] }}</small>
+        </td>
+        <td><span class="role-pill role-{{ user['role'] }}">{{ "管理员" if user["role"] == "admin" else "普通用户" }}</span></td>
+        <td><span class="status-pill status-{{ 'enabled' if user['enabled'] else 'disabled' }}">{{ "启用" if user['enabled'] else "禁用" }}</span></td>
+        <td><span class="point-balance">{{ user["points"] }} 点</span></td>
+        <td><small title="{{ (user['last_used_at'] or '未生成')|e }}">{{ user["last_used_at"] or "未生成" }}</small></td>
+        <td><small title="{{ user['created_at']|e }}">{{ user["created_at"] }}</small></td>
+        <td>
+          <a class="table-link" href="/admin/users/{{ user['id'] }}/ledger">流水</a>
+          {% if g.user["id"] == user["id"] %}
+          <span class="table-muted">当前账号</span>
+          {% endif %}
+        </td>
+        {% if can_edit_users %}<td>
+          <label class="table-edit-toggle">
+            <input type="checkbox" data-user-edit-toggle aria-label="编辑 {{ user['username'] }}">
+            <span>编辑</span>
+          </label>
+        </td>{% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="{{ 10 if can_bulk_users and can_edit_users else (9 if can_bulk_users or can_edit_users else 8) }}">暂无用户。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "admin/_pagination.html" %}
+
+{% if can_edit_users %}<aside class="admin-user-edit-drawer" data-user-edit-drawer hidden aria-label="用户编辑">
+  <div class="admin-user-edit-head">
+    <div>
+      <span>编辑用户</span>
+      <strong data-edit-user-name>未选择用户</strong>
+      <small data-edit-user-meta>请选择一行用户</small>
+    </div>
+    <button type="button" data-user-edit-close aria-label="关闭编辑">关闭</button>
+  </div>
+  <div class="admin-user-edit-body">
+    {% if can("users.points.adjust") %}<form method="post" class="drawer-action-form drawer-adjust-form" data-user-action-form data-action-template="/admin/users/__USER_ID__/adjust">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>
+        <span>充值 / 扣费</span>
+        <input name="delta" type="number" placeholder="+100 / -20" required>
+      </label>
+      <label>
+        <span>备注</span>
+        <input name="admin_note" placeholder="备注">
+      </label>
+      <button type="submit">调整余额</button>
+    </form>{% endif %}
+
+    {% if can("users.login_failures.reset") %}<form method="post" class="drawer-action-form" data-user-action-form data-action-template="/admin/users/__USER_ID__/login-failures/reset">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">重置登录失败次数</button>
+    </form>{% endif %}
+
+    {% if can("users.password.reset") %}<form method="post" class="drawer-action-form" data-user-action-form data-action-template="/admin/users/__USER_ID__/password">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>
+        <span>新密码</span>
+        <input name="password" type="password" minlength="6" placeholder="至少 6 位" required>
+      </label>
+      <button type="submit">修改密码</button>
+    </form>{% endif %}
+
+    {% if can("users.role.update") %}<form method="post" class="drawer-action-form" data-user-action-form data-user-role-form data-action-template="/admin/users/__USER_ID__/role">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>
+        <span>角色</span>
+        <select name="role">
+          {% for role in management_roles|sort %}<option value="{{ role }}">{{ role }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit">保存角色</button>
+    </form>{% endif %}
+
+    {% if can("users.status.update") %}<form method="post" class="drawer-action-form" data-user-action-form data-user-status-form data-action-template="/admin/users/__USER_ID__/status">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="config-check"><input name="enabled" type="checkbox" value="1"> 启用账号</label>
+      <button type="submit">保存状态</button>
+    </form>{% endif %}
+
+    {% if can("users.delete") %}<form method="post" class="drawer-action-form drawer-delete-form" data-user-action-form data-user-delete-form data-action-template="/admin/users/__USER_ID__/delete" data-confirm-delete="删除后不可恢复，确认删除这个用户？">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="danger-button">删除用户</button>
+    </form>{% endif %}
+    <p class="drawer-current-user-note" data-current-user-note hidden>当前登录账号不能删除。</p>
+  </div>
+</aside>{% endif %}
+{% endblock %}

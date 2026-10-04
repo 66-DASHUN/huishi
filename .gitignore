@@ -1,0 +1,36 @@
+# 依赖与构建产物
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.next/
+dist/
+
+# 运行时数据
+data/
+logs/
+*.sqlite3
+*.db
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+
+# 宣传物料（37M 视频与海报，不属于源码）
+static/media/
+
+# 发布产物与临时目录
+*.tar.gz
+*.tgz
+.codex-stage/
+.remote-*/
+.tmp*/
+tmp/
+releases/
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store

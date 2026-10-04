@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}账户中心 - 绘世{% endblock %}
+{% block body_class %}console-page{% endblock %}
+{% block content %}
+<main class="simple-page account-console">
+  <nav class="simple-nav">
+    <a href="/">绘世</a>
+    <a href="/workspace">工作台</a>
+    <a href="/pricing">充值</a>
+    {% if user["role"] == "admin" %}<a href="/admin/">管理后台</a>{% endif %}
+    <a href="/logout">退出</a>
+  </nav>
+
+  <header class="account-summary account-hero-panel">
+    <div>
+      <span>ACCOUNT</span>
+      <h1>账户中心</h1>
+      <p>{{ user["username"] }} · 账户状态</p>
+    </div>
+    <div class="account-balance-card">
+      <span>当前余额</span>
+      <strong>{{ user["points"] }} 点</strong>
+      <small>{{ "自备 Key 生成不消耗积分" if has_user_key else "共享资源生成按规则扣费" }}</small>
+    </div>
+  </header>
+
+  <section class="account-mode-grid" aria-label="账户状态">
+    <article>
+      <span>API 模式</span>
+      <strong>{{ "自备 Key" if has_user_key else "共享资源" }}</strong>
+      <small>{{ "生成时优先使用您的 API Key，不消耗积分。" if has_user_key else "使用平台 Provider，按计费规则扣除积分。" }}</small>
+      <a href="/account/api-key">{{ "管理 API Key" if has_user_key else "配置 API Key" }}</a>
+    </article>
+    <article>
+      <span>计费规则</span>
+      <strong>统一积分</strong>
+      <small>工作台与画布共用后台配置的 1K/2K/4K 积分规则。</small>
+      <a href="/pricing">查看积分说明</a>
+    </article>
+  </section>
+
+  <div class="section-heading account-section-heading">
+    <h2>我的邀请码</h2>
+    <form method="post" action="/account/invites" class="inline-action-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">生成邀请码</button>
+    </form>
+  </div>
+  <div class="ledger-list invite-list account-list-panel">
+    {% for invite in invites %}
+    <article class="ledger-row account-ledger-row account-invite-row">
+      <strong>{{ invite["code"] }}</strong>
+      <span>双方各 {{ invite["reward_points"] }} 点</span>
+      <span>{{ invite["used_count"] }}{% if invite["max_uses"] is not none %} / {{ invite["max_uses"] }}{% else %} / 不限{% endif %}</span>
+      <small>{{ "启用" if invite["enabled"] else "停用" }}</small>
+    </article>
+    {% else %}
+    <p class="empty-workspace account-empty-state">暂无邀请码。</p>
+    {% endfor %}
+  </div>
+
+  <div class="section-heading account-section-heading">
+    <h2>积分流水</h2>
+    <a href="/pricing">充值</a>
+  </div>
+  <div class="ledger-list account-list-panel">
+    {% for item in ledger %}
+    <article class="ledger-row account-ledger-row {{ 'is-positive' if item.is_positive else 'is-negative' }}">
+      <div>
+        <strong>{{ item.label }}</strong>
+        {% if item.note %}<small>{{ item.note }}</small>{% endif %}
+      </div>
+      <span class="account-ledger-delta">{{ item.delta_text }}</span>
+      <time datetime="{{ item.time }}">{{ item.time }}</time>
+    </article>
+    {% else %}
+    <p class="empty-workspace account-empty-state">暂无流水。</p>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/theme.js') }}"></script>{% endblock %}

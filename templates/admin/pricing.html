@@ -1,0 +1,24 @@
+{% extends "admin/layout.html" %}
+{% block title %}计费设置 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="page-hero">
+  <span>计费</span>
+  <h1>计费设置</h1>
+  <p>配置不同生成模式和分辨率的积分消耗，调整后会立即影响后续生成。</p>
+</header>
+<div class="table-list">
+  {% for rule in rules %}
+  <form method="post" class="admin-row {% if not rule['enabled'] %}is-disabled{% endif %}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="mode" value="{{ rule['mode'] }}">
+    <input type="hidden" name="resolution" value="{{ rule['resolution'] }}">
+    <strong>{{ "文生图" if rule["mode"] == "text" else "参考图编辑" }} {{ rule["resolution"] }}</strong>
+    <input name="points_per_image" type="number" min="0" value="{{ rule['points_per_image'] }}">
+    <label><input name="enabled" type="checkbox" {% if rule["enabled"] %}checked{% endif %}> 启用</label>
+    <button type="submit">保存</button>
+    <span>{{ rule["points_per_image"] }} 点/张</span>
+    <em class="rule-state">{{ "已启用" if rule["enabled"] else "未启用" }}</em>
+  </form>
+  {% endfor %}
+</div>
+{% endblock %}

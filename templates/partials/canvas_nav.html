@@ -1,0 +1,40 @@
+<aside class="studio-rail" aria-label="主导航">
+  <a class="rail-logo" href="/" aria-label="绘世首页">绘</a>
+  <nav class="rail-nav" aria-label="创作导航">
+    <a class="rail-nav-item {{ 'is-active' if active_nav == 'canvas' else '' }}" href="/canvas" title="画布">
+      <span class="rail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8"/><path d="M8 12h6"/><path d="M8 16h4"/></svg>
+      </span>
+      <span>画布</span>
+    </a>
+    <a class="rail-nav-item {{ 'is-active' if active_nav == 'generate' else '' }}" href="{{ '/workspace?dialogue=' ~ active_dialogue['id'] if active_dialogue else '/workspace' }}" title="生成">
+      <span class="rail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><path d="M6 4h8l4 4v12H6z"/><path d="M14 4v5h5"/><path d="M9 15h6"/><path d="M12 12v6"/></svg>
+      </span>
+      <span>生成</span>
+    </a>
+    <a class="rail-nav-item {{ 'is-active' if active_nav == 'assets' else '' }}" href="/assets" title="资产">
+      <span class="rail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 15l2.6-3 2 2.3 1.4-1.6L18 17"/><circle cx="9" cy="9" r="1.2"/></svg>
+      </span>
+      <span>资产</span>
+    </a>
+  </nav>
+  <div class="rail-footer">
+    <details class="rail-settings">
+      <summary aria-label="打开设置菜单" title="设置">
+        <span class="rail-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L14.3 3H9.7l-.4 2.9A7 7 0 0 0 7.4 7L5 6 3 9.4l2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.1l-2 1.5 2 3.4 2.4-1c.6.5 1.2.8 1.9 1.1l.4 2.9h4.6l.4-2.9c.7-.3 1.3-.6 1.9-1.1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1.1z"/></svg>
+        </span>
+      </summary>
+      <div class="rail-settings-panel">
+        <a href="/account">账户</a>
+        <a href="/pricing">充值</a>
+        {% if g.user["role"] == "admin" %}
+        <a href="/admin/">管理后台</a>
+        {% endif %}
+      </div>
+    </details>
+    <a class="rail-points" href="/pricing" title="充值">{{ g.user["points"] }} 点</a>
+  </div>
+</aside>
