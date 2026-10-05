@@ -78,6 +78,26 @@ function normalizedOrigin(value: string) {
     }
 }
 
+/**
+ * Read the host session token from a canvas URL.
+ *
+ * The token is a bearer credential, so the host puts it in the URL *fragment*
+ * (after "#"): fragments are never sent to the server, which keeps the token
+ * out of access logs, and they are also excluded from the Referer header and
+ * from the browser-history entry for the embed URL.
+ *
+ * The query-string lookup is retained so a canvas page already open from
+ * before this change keeps working; it can be dropped once no such page can
+ * still be live.
+ */
+export function readHostSessionToken(location?: { hash?: string; search?: string }) {
+    const source = location ?? (typeof window !== "undefined" ? window.location : undefined);
+    if (!source) return "";
+    const fromFragment = new URLSearchParams((source.hash || "").replace(/^#/, "")).get("host_session_token");
+    if (fromFragment) return fromFragment;
+    return new URLSearchParams(source.search || "").get("host_session_token") || "";
+}
+
 export function isTrustedHostFrameOrigin(hostOrigin: string) {
     if (typeof window === "undefined" || window.parent === window || !document.referrer) return false;
     return normalizedOrigin(hostOrigin) === normalizedOrigin(document.referrer);
@@ -89,7 +109,7 @@ function hasOrigin(value: string, expectedOrigin: string) {
 
 export function readHostCanvasBootstrap(search: URLSearchParams): HostCanvasSessionBootstrap | null {
     const mode = search.get("host_mode") || "";
-    const token = search.get("host_session_token") || "";
+    const token = readHostSessionToken() || search.get("host_session_token") || "";
     const verifyUrl = search.get("host_session_verify_url") || "";
     const assetsLibraryUrl = search.get("host_assets_library_url") || "";
     const generateUrl = search.get("host_generate_url") || "";
@@ -129,6 +149,11 @@ export async function verifyHostCanvasSession(bootstrap: HostCanvasSessionBootst
     if (typeof window !== "undefined") {
         const cleanUrl = new URL(window.location.href);
         ["host_session_token", "host_session_verify_url", "host_assets_library_url", "host_generate_url", "host_video_tasks_url", "host_chat_url", "host_projects_url", "host_user_key_url"].forEach((key) => cleanUrl.searchParams.delete(key));
+        // Drop the token from the fragment too, so it does not linger in the
+        // address bar or the history entry after the session is established.
+        const fragment = new URLSearchParams(cleanUrl.hash.replace(/^#/, ""));
+        fragment.delete("host_session_token");
+        cleanUrl.hash = fragment.toString() ? `#${fragment.toString()}` : "";
         window.history.replaceState({}, document.title, cleanUrl.toString());
     }
     return payload;

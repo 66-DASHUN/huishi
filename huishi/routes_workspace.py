@@ -599,19 +599,25 @@ def build_canvas_embed_url(canvas_app_url: str, token: str) -> str:
         {
             "mode": "recent",
             "host_mode": "huishi",
-            "host_session_token": token,
             "host_session_verify_url": verify_url,
             "host_assets_library_url": assets_library_url,
             "host_generate_url": generate_url,
             "host_video_tasks_url": video_tasks_url,
             "host_chat_url": chat_url,
             "host_projects_url": projects_url,
-            "host_user_key_url": url_for("workspace.canvas_user_key_get", token=token, _external=True),
+            "host_user_key_url": url_for("workspace.canvas_user_key_get", _external=True),
             "host_user_key_enabled": user_key_enabled_value,
             "host_origin": request.host_url.rstrip("/"),
         }
     )
-    return f"{base_url}/canvas?{query}"
+    # The session token is a bearer credential, so it goes in the URL fragment
+    # rather than the query string. Fragments are never sent to the server, so
+    # the token cannot reach access logs, and it is also kept out of the
+    # Referer header and the browser history entry for the canvas page.
+    # Everything else stays in the query so it remains server-visible for
+    # debugging and is cleaned up by the canvas after the session is verified.
+    fragment = urlencode({"host_session_token": token})
+    return f"{base_url}/canvas?{query}#{fragment}"
 
 
 def build_canvas_prompts_url(canvas_app_url: str) -> str:

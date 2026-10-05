@@ -16,6 +16,7 @@ import { useCanvasStore } from "./stores/use-canvas-store";
 import { useCanvasUiStore } from "./stores/use-canvas-ui-store";
 import { exportCanvasProjects } from "./utils/canvas-export";
 import { nextCanvasProjectTitle } from "./utils/canvas-project-title";
+import { readHostSessionToken } from "./lib/host-canvas-session";
 
 export default function CanvasPage() {
     return (
@@ -57,11 +58,18 @@ function CanvasProjectsPage() {
         return query.toString();
     }, [searchParams]);
     const agentQuery = agentMode ? `?${searchParams.toString()}` : hostSessionQuery ? `?${hostSessionQuery}` : "";
+    // The host session token lives in the URL fragment, which a client-side
+    // route change does not carry over on its own. Forward it explicitly so the
+    // project page can still establish the host session.
+    const hostSessionFragment = useMemo(() => {
+        const token = readHostSessionToken();
+        return token ? `#host_session_token=${encodeURIComponent(token)}` : "";
+    }, []);
     const enterProject = useCallback(
         (id: string) => {
-            router.push(`/canvas/${id}${agentQuery}`);
+            router.push(`/canvas/${id}${agentQuery}${hostSessionFragment}`);
         },
-        [agentQuery, router],
+        [agentQuery, hostSessionFragment, router],
     );
     const createProjectAndStay = () => {
         createProject(nextCanvasProjectTitle(projects, "新建画布"));

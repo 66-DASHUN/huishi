@@ -11,6 +11,7 @@ import { requestEdit, requestGeneration, requestImageQuestion } from "@/services
 import { requestAudioGenerationResult, storeGeneratedAudio, type HostAudioProxy } from "@/services/api/audio";
 import { requestVideoGeneration, storeGeneratedVideo, type HostVideoProxy } from "@/services/api/video";
 import { DOCS_URL } from "@/constant/env";
+import { readHostSessionToken } from "@/app/(user)/canvas/lib/host-canvas-session";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
@@ -216,7 +217,7 @@ function InfiniteCanvasPage() {
     const hostUserId = useCanvasHostSessionStore((state) => state.userId);
     const hostRole = useCanvasHostSessionStore((state) => state.role);
     const billingIdentity = useCanvasHostSessionStore((state) => state.billingIdentity);
-    const hostToken = useCanvasHostSessionStore((state) => state.token) || (typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("host_session_token") ?? "") : "");
+    const hostToken = useCanvasHostSessionStore((state) => state.token) || readHostSessionToken();
     const hostGenerateUrl = useCanvasHostSessionStore((state) => state.generateUrl) || (typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("host_generate_url") ?? "") : "");
     const hostVideoTasksUrl = useCanvasHostSessionStore((state) => state.videoTasksUrl) || (typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("host_video_tasks_url") ?? "") : "");
     const hostOrigin = useCanvasHostSessionStore((state) => state.hostOrigin) || (typeof window !== "undefined" ? (new URLSearchParams(window.location.search).get("host_origin") ?? "") : "");

@@ -4,12 +4,7 @@ import { App, Button, Form, Input, Modal, Progress, Segmented, Select, Tabs } fr
 import { CircleAlert, Cloud, Plus, RefreshCw, Trash2, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
 
-// 读取主站嵌入参数
-const _searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
-const HOST_USER_KEY_ENABLED = _searchParams.get("host_user_key_enabled") === "1";
-const HOST_USER_KEY_URL = _searchParams.get("host_user_key_url") || "";
-const HOST_SESSION_TOKEN = _searchParams.get("host_session_token") || "";
-
+import { readHostSessionToken } from "@/app/(user)/canvas/lib/host-canvas-session";
 import { ModelPicker } from "@/components/model-picker";
 import { fetchChannelModels } from "@/services/api/image";
 import { syncAppDataToWebdav, type AppSyncDomainKey, type AppSyncProgressEvent } from "@/services/app-sync";
@@ -28,6 +23,13 @@ import {
     type ModelCapability,
     type ModelChannel,
 } from "@/stores/use-config-store";
+
+// 读取主站嵌入参数
+const _searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const HOST_USER_KEY_ENABLED = _searchParams.get("host_user_key_enabled") === "1";
+const HOST_USER_KEY_URL = _searchParams.get("host_user_key_url") || "";
+const HOST_SESSION_TOKEN = readHostSessionToken();
+
 
 type ModelGroup = {
     capability: ModelCapability;
