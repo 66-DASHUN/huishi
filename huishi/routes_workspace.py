@@ -73,6 +73,13 @@ from huishi.image_sizes import (
     _resolution_value_for_ratio,
     _unsupported_size_message,
 )
+from huishi.payloads import (
+    format_file_size_limit,
+    is_http_url,
+    parse_optional_int,
+    serialize_dialogue,
+    serialize_record,
+)
 from huishi.prompt_api import optimize_prompt
 from huishi.user_key import get_user_provider
 from huishi.upload_storage import get_upload_storage, normalize_prefix
@@ -2426,16 +2433,6 @@ def require_active_generation_task_slot(user_id: int) -> None:
         raise ValueError(f"已有 {active_count} 个生成任务正在排队或生成，请完成后再提交")
 
 
-def parse_optional_int(raw_value: str | None) -> int | None:
-    value = (raw_value or "").strip()
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError as exc:
-        raise ValueError("对话参数无效，请刷新页面后重试") from exc
-
-
 def parse_reference_path_form_values() -> list[str]:
     raw_values = request.form.getlist("reference_paths")
     paths = []
@@ -2447,11 +2444,6 @@ def parse_reference_path_form_values() -> list[str]:
     return paths
 
 
-def is_http_url(raw_url: str) -> bool:
-    parsed = urlsplit(raw_url)
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
-
-
 def is_allowed_reference_image(file_storage) -> bool:
     suffix = Path(file_storage.filename or "").suffix.lower()
     return file_storage.mimetype in ALLOWED_REFERENCE_MIMETYPES and suffix in ALLOWED_REFERENCE_SUFFIXES
@@ -2459,14 +2451,6 @@ def is_allowed_reference_image(file_storage) -> bool:
 
 def max_reference_image_bytes() -> int:
     return int(current_app.config.get("MAX_REFERENCE_IMAGE_BYTES", 12 * 1024 * 1024))
-
-
-def format_file_size_limit(size_bytes: int) -> str:
-    if size_bytes >= 1024 * 1024:
-        return f"{size_bytes / (1024 * 1024):.0f}MB"
-    if size_bytes >= 1024:
-        return f"{size_bytes / 1024:.0f}KB"
-    return f"{size_bytes}B"
 
 
 def reference_image_size(file_storage) -> int:
@@ -2541,44 +2525,6 @@ def generation_error(message: str, status_code: int):
     if wants_json():
         return jsonify({"ok": False, "error": message}), status_code
     return message, status_code
-
-
-def serialize_record(record) -> dict[str, object]:
-    return {
-        "id": record["id"],
-        "dialogue_id": record["dialogue_id"] if "dialogue_id" in record.keys() else None,
-        "generation_group_id": record["generation_group_id"],
-        "group_index": record["group_index"],
-        "prompt": record["prompt"],
-        "image_path": record["image_path"],
-        "images": record["image_paths"],
-        "mode": record["mode"],
-        "ratio": record["ratio"],
-        "resolution": record["resolution"],
-        "actual_size": record["actual_size"],
-        "quality": record["quality"],
-        "output_format": record["output_format"],
-        "count": record["count"],
-        "model_source": record["model_source"],
-        "elapsed_seconds": record["elapsed_seconds"],
-        "points_charged": record["points_charged"],
-        "reference_paths": record["reference_paths"],
-        "asset_source": record.get("asset_source", "image"),
-        "media_type": record.get("media_type") or record.get("asset_source", "image"),
-        "mime_type": record.get("mime_type", ""),
-        "duration_ms": int(record.get("duration_ms") or 0),
-        "favorite": record["favorite"],
-        "created_at": record["created_at"],
-    }
-
-
-def serialize_dialogue(dialogue) -> dict[str, object]:
-    return {
-        "id": dialogue["id"],
-        "title": dialogue["title"],
-        "created_at": dialogue["created_at"],
-        "updated_at": dialogue["updated_at"],
-    }
 
 
 def serialize_generation_task(task) -> dict[str, object]:
