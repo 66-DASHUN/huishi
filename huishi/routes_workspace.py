@@ -107,7 +107,14 @@ from huishi.records import (
     mark_generation_task_succeeded,
     record_generation_seed,
 )
-from huishi.secrets import redact_sensitive_text
+from huishi.secrets import (
+    _looks_like_html_error,
+    redact_sensitive_text,
+    sanitize_generation_error_message,
+)
+
+# Kept for tests and callers that import the pre-move name from this module.
+_sanitize_generation_error_message = sanitize_generation_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -354,38 +361,6 @@ def parse_provider_form(existing: dict | None = None, provider_id: int | None = 
         "models": models,
         "settings": settings,
     }
-
-
-def _looks_like_html_error(message: str) -> bool:
-    text = (message or "").lstrip().lower()
-    return (
-        text.startswith("<!doctype html")
-        or text.startswith("<html")
-        or "<body" in text
-        or "<head" in text
-        or "just a moment" in text
-        or "enable javascript and cookies" in text
-    )
-
-
-def _sanitize_generation_error_message(message: str) -> str:
-    text = provider_store.redact_sensitive_text(str(message or ""))
-    # Errors from user-supplied providers may contain credentials without a
-    # configured secret value available to this request.
-    text = re.sub(r"(?i)(authorization\s*:\s*bearer\s+)[^\s,;]+", r"\1[redacted]", text)
-    text = re.sub(r"(?i)(\b(?:api[_-]?key|token|secret)\s*[:=]\s*)[^\s,;]+", r"\1[redacted]", text)
-    text = re.sub(r"(?i)\b(?:sk|sess)[-_A-Za-z0-9]{8,}\b", "[redacted]", text)
-    text = re.sub(r"https?://[^\s<>'\")]+", lambda match: provider_store.redact_url(match.group(0)), text)
-    text = str(text).strip()
-    if not text:
-        return "生成失败，请联系管理员"
-    if _looks_like_html_error(text):
-        return "生成失败，请联系管理员"
-    lower_text = text.lower()
-    sensitive_markers = ("'error':", '"error":', "'type':", '"type":', "'code':", '"code":')
-    if any(marker in lower_text for marker in sensitive_markers):
-        return "生成失败，请联系管理员"
-    return text
 
 
 def group_records_for_workspace(records: list[dict]) -> list[dict[str, object]]:
@@ -990,7 +965,7 @@ def canvas_generate():
         response.status_code = 400
         return add_canvas_cors(response, canvas_origin)
     except (ValueError, RuntimeError, OpenAIError) as exc:
-        raw_msg = _sanitize_generation_error_message(str(exc))
+        raw_msg = sanitize_generation_error_message(str(exc))
         error_msg = f"您的 API Key 调用失败：{raw_msg}" if use_user_key else raw_msg
         response = jsonify({"ok": False, "error": error_msg})
         response.status_code = 502
@@ -2055,7 +2030,7 @@ def regenerate_asset(record_id: int):
     except ConfigurationError as exc:
         return generation_error(str(exc), 400)
     except (ValueError, RuntimeError, OpenAIError) as exc:
-        raw_msg = _sanitize_generation_error_message(str(exc))
+        raw_msg = sanitize_generation_error_message(str(exc))
         error_msg = f"您的 API Key 调用失败：{raw_msg}" if use_user_key else f"生成失败：{raw_msg}"
         return generation_error(error_msg, 502)
 
@@ -2635,7 +2610,7 @@ def serialize_generation_task(task) -> dict[str, object]:
         "status": task["status"],
         "record_id": task["record_id"],
         "reference_paths": task["reference_paths"],
-        "error_message": _sanitize_generation_error_message(task["error_message"]),
+        "error_message": sanitize_generation_error_message(task["error_message"]),
         "created_at": task["created_at"],
         "updated_at": task["updated_at"],
         "finished_at": task["finished_at"],

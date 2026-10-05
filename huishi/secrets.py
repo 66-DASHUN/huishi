@@ -103,3 +103,43 @@ def load_secret_app_setting_value(key: str, value: str) -> str:
     if key in SECRET_APP_SETTING_KEYS:
         return decrypt_secret(value)
     return value
+
+
+def _looks_like_html_error(message: str) -> bool:
+    text = (message or "").lstrip().lower()
+    return (
+        text.startswith("<!doctype html")
+        or text.startswith("<html")
+        or "<body" in text
+        or "<head" in text
+        or "just a moment" in text
+        or "enable javascript and cookies" in text
+    )
+
+
+def sanitize_generation_error_message(message: str) -> str:
+    """Reduce an upstream error to something safe to show a user.
+
+    Upstream providers and user-supplied endpoints can echo credentials,
+    internal URLs, raw JSON envelopes, or an HTML error page. Anything that
+    survives redaction but still looks like a machine-readable payload or a
+    captive-portal page is replaced with a generic message, because showing it
+    would leak infrastructure detail without helping the user.
+    """
+    text = redact_sensitive_text(str(message or ""))
+    # Errors from user-supplied providers may contain credentials without a
+    # configured secret value available to this request.
+    text = re.sub(r"(?i)(authorization\s*:\s*bearer\s+)[^\s,;]+", r"\1[redacted]", text)
+    text = re.sub(r"(?i)(\b(?:api[_-]?key|token|secret)\s*[:=]\s*)[^\s,;]+", r"\1[redacted]", text)
+    text = re.sub(r"(?i)\b(?:sk|sess)[-_A-Za-z0-9]{8,}\b", "[redacted]", text)
+    text = re.sub(r"https?://[^\s<>'\")]+", lambda match: redact_url(match.group(0)), text)
+    text = str(text).strip()
+    if not text:
+        return "生成失败，请联系管理员"
+    if _looks_like_html_error(text):
+        return "生成失败，请联系管理员"
+    lower_text = text.lower()
+    sensitive_markers = ("'error':", '"error":', "'type':", '"type":', "'code':", '"code":')
+    if any(marker in lower_text for marker in sensitive_markers):
+        return "生成失败，请联系管理员"
+    return text
