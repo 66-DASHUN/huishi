@@ -182,6 +182,26 @@ docker compose -f compose.prod.yml exec -T backend python -c \
   "import huishi.network, huishi.providers, huishi.image_api, huishi.video_api; print('imports ok')"
 ```
 
+### 部署时的三个真实陷阱（都踩过）
+
+1. **构建服务必须带 `image:` tag 运行，否则会静默回退到 `:latest`。**
+   基线 `compose.prod.yml` 里四个构建服务都没有 `image:`，如果直接
+   `docker compose up -d`（不带 release 覆盖文件、不带 `--build`），
+   compose 会使用本地已存在的 `huishi-backend:latest` / `huishi-worker:latest`
+   ——那是**任意一个历史遗留的旧镜像**，会让线上代码静默回退数周。
+   永远使用 release 目录的 `compose.release.yml` 覆盖。
+
+2. **`docker compose up -d` 不带 `--scale worker=4` 会把 worker 打回 1 个。**
+   而且如果命令里服务名意外为空（例如误写 `$(...)` 展开为空），
+   compose 会**拉起整个项目**，连带重置 backend/worker 到 `:latest`。
+   只操作目标服务时必须显式写服务名 + `--no-deps`。
+
+3. **画布 Dockerfile 用了 BuildKit 专属的 `--mount=type=cache`。**
+   宿主需要 `docker-buildx` 插件（`apt-get install -y docker-buildx`），
+   并以 `DOCKER_BUILDKIT=1` 构建；否则报
+   "BuildKit is enabled but the buildx component is missing"。
+   legacy builder 无法解析该指令。
+
 ### 已知监控盲区
 
 - **`worker` 没有健康检查。** `restart: unless-stopped` 只在进程退出时触发；
