@@ -63,9 +63,15 @@ def json_success(**payload):
 
 
 def client_ip() -> str:
-    forwarded = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-    if forwarded:
-        return forwarded
+    """Return the client address for rate limiting.
+
+    This deliberately does not parse X-Forwarded-For by hand. nginx appends to
+    that header, so its first entry is supplied by the caller and trivially
+    spoofable; reading it directly let a caller pick a fresh rate-limit bucket
+    per request. ProxyFix is configured with ``x_for=1`` so Werkzeug resolves
+    the header against the single trusted proxy hop and writes the result to
+    ``remote_addr``, which is what we read here.
+    """
     return request.remote_addr or "unknown"
 
 

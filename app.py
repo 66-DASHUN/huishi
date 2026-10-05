@@ -144,7 +144,7 @@ def configure_daily_file_logging(*, log_dir: Path | str | None = None, today=dat
 def create_app(*, testing: bool = False) -> Flask:
     app = Flask(__name__)
     app.jinja_env.filters["model_label"] = provider_store.model_label
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     app.config.from_object(Config)
     app.config["LOG_DIR"] = Path(os.environ.get("HUISHI_LOG_DIR", DEFAULT_LOG_DIR))
     app.config["SECRET_KEY"] = os.environ.get("HUISHI_SECRET_KEY", app.config["SECRET_KEY"])
@@ -214,6 +214,27 @@ def create_app(*, testing: bool = False) -> Flask:
         "/api/canvas/estimate",
     }
 
+    # Endpoints that authenticate a cross-origin canvas request via the signed
+    # host session token (see canvas_api_user) instead of a cookie. Listed
+    # explicitly so a new canvas route is not exempted by accident.
+    CANVAS_CSRF_EXEMPT_ENDPOINTS = {
+        "workspace.import_canvas_assets",
+        "workspace.canvas_assets_library",
+        "workspace.canvas_asset_library_item",
+        "workspace.canvas_conversations_list",
+        "workspace.canvas_conversations_create",
+        "workspace.canvas_conversations_update",
+        "workspace.canvas_conversation_messages",
+        "workspace.canvas_estimate",
+        "workspace.canvas_generate",
+        "workspace.canvas_projects_collection",
+        "workspace.canvas_project_item",
+        "workspace.canvas_session_verify",
+        "workspace.canvas_text_chat",
+        "workspace.canvas_user_key_get",
+        "workspace.canvas_user_key_post",
+    }
+
     @app.before_request
     def assign_request_id():
         incoming = request.headers.get("X-Request-ID", "").strip()
@@ -227,10 +248,14 @@ def create_app(*, testing: bool = False) -> Flask:
             return
         if request.path in CSRF_EXEMPT_PATHS:
             return
-        if request.path.startswith("/api/canvas/"):
+        # Cross-origin canvas endpoints authenticate the signed host token in
+        # canvas_api_user rather than a cookie, so CSRF does not apply to them.
+        # This is an explicit endpoint list on purpose: a blanket
+        # ``request.path.startswith("/api/canvas/")`` would silently exempt every
+        # future canvas route, including any that authenticates by cookie only.
+        # Add new canvas endpoints here deliberately.
+        if request.endpoint in CANVAS_CSRF_EXEMPT_ENDPOINTS:
             return
-        # These cross-origin canvas routes authenticate the signed host token in
-        # canvas_api_user. Cookie-only requests still require the normal CSRF token.
         if request.headers.get("X-Canvas-Session") and request.endpoint in (
             "workspace.create_video_task_api", "workspace.upload_media_reference",
             "workspace.cancel_video_task_api",

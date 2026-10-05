@@ -55,7 +55,7 @@ def probe_redis() -> ProbeResult:
 def _probe_http(url: str, label: str) -> ProbeResult:
     if not url:
         return _result("warning", f"未配置{label}地址")
-    response = requests.get(url, timeout=(0.5, 1.0), verify=False)
+    response = requests.get(url, timeout=(0.5, 1.0), verify=True)
     response.raise_for_status()
     latency_ms = int(response.elapsed.total_seconds() * 1000)
     return _result("ok", f"{response.status_code} · {latency_ms} ms", latency_ms=latency_ms)
