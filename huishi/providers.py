@@ -1492,6 +1492,10 @@ def generate_image_with_failover(**kwargs) -> dict[str, object]:
     candidates = image_provider_candidates(resolution, requested_model)
     generation_kwargs = dict(kwargs)
     generation_kwargs.pop("model", None)
+    # ``task_id`` 只为埋点记账服务（见 ``_log_provider_call``），
+    # ``generate_image`` 不接受它。不清掉会以 TypeError 让队列里
+    # 的每一次生图都失败（2026-10-06 修复）。
+    generation_kwargs.pop("task_id", None)
     if not candidates:
         raise ConfigurationError("没有可用的生图配置，请到设置页添加并启用生图配置")
     last_error: str = ""

@@ -212,6 +212,44 @@ class TestFailureRateAndStatus:
             assert channel["enabled"] is False
             assert channel["status"] == "critical"
 
+    def test_stale_disabled_at_on_an_enabled_channel_is_not_critical(self, app):
+        """Stale ``disabled_at`` must not outrank ``enabled``.
+
+        Found in production 2026-10-06: the ``grok`` channel had
+        ``enabled=1`` but a ``disabled_at`` left over from 2026-09-13, so a
+        channel that had just served a successful generation (100% success
+        rate) was rendered as 异常. ``save_provider`` sets ``enabled`` without
+        clearing ``disabled_at``, so any manually re-enabled channel hits this.
+        """
+        with app.app_context():
+            provider_id = save_channel("grok")
+            get_db().execute(
+                "UPDATE api_providers SET disabled_at=? WHERE id=?",
+                (datetime.now(timezone.utc).isoformat(), provider_id),
+            )
+            log(provider_id, pm.OUTCOME_SUCCEEDED)
+            get_db().commit()
+
+            channel = pm.channel_health(24)["channels"][0]
+            assert channel["enabled"] is True
+            assert channel["calls"] == 1
+            assert channel["failure_rate"] == 0.0
+            assert channel["status"] == "healthy"
+
+    def test_disabled_channel_stays_critical_even_when_it_has_successes(self, app):
+        """The converse: a genuinely disabled channel must not look healthy."""
+        with app.app_context():
+            provider_id = save_channel("turned-off", enabled=False)
+            get_db().execute(
+                "UPDATE api_providers SET disabled_at=? WHERE id=?",
+                (datetime.now(timezone.utc).isoformat(), provider_id),
+            )
+            log(provider_id, pm.OUTCOME_SUCCEEDED)
+            get_db().commit()
+
+            channel = pm.channel_health(24)["channels"][0]
+            assert channel["status"] == "critical"
+
     def test_consecutive_failures_counts_only_the_trailing_run(self, app):
         with app.app_context():
             provider_id = save_channel("alpha")
@@ -446,3 +484,80 @@ class TestChannelHealthPage:
             login(client, admin_id())
         body = client.get("/admin/channel-health").get_data(as_text=True)
         assert "没有渠道调用记录" in body
+
+
+class TestTaskIdIsNotForwardedUpstream:
+    """``task_id`` is telemetry-only and must not reach ``generate_image``.
+
+    Regression for a production outage found 2026-10-06: the queue path passed
+    ``task_id=`` into ``generate_image_with_failover``, which forwards its kwargs
+    to ``generate_image``. ``generate_image`` has no such parameter, so *every*
+    queued image generation died with a TypeError before any upstream call --
+    which also meant no telemetry row was ever written.
+    """
+
+    def test_failover_does_not_forward_task_id_to_generate_image(self, app, monkeypatch):
+        captured: dict[str, object] = {}
+
+        def fake_generate_image(**kwargs):
+            captured.update(kwargs)
+            return {"image_path": "x.png", "image_paths": ["x.png"], "prompt": "p"}
+
+        monkeypatch.setattr(providers, "generate_image", fake_generate_image)
+
+        with app.app_context():
+            save_channel("alpha")
+            get_db().commit()
+
+            providers.generate_image_with_failover(
+                task_id=4242,
+                prompt="p",
+                mode="text",
+                ratio="1:1",
+                resolution="1K",
+                count=1,
+                quality="auto",
+                output_format="png",
+                reference_images=[],
+                model="gpt-image-2",
+            )
+
+        assert "task_id" not in captured, "task_id 泄漏到了上游 generate_image"
+        assert captured["prompt"] == "p"
+        assert captured["resolution"] == "1K"
+
+    def test_task_id_still_reaches_the_telemetry_row(self, app, monkeypatch):
+        """The fix must not silently drop the attribution it exists for."""
+        recorded: list[dict] = []
+
+        def fake_record(**kwargs):
+            recorded.append(kwargs)
+
+        monkeypatch.setattr(
+            "huishi.provider_metrics.record_provider_call", fake_record
+        )
+        monkeypatch.setattr(
+            providers,
+            "generate_image",
+            lambda **kw: {"image_path": "x.png", "image_paths": ["x.png"], "prompt": "p"},
+        )
+
+        with app.app_context():
+            save_channel("alpha")
+            get_db().commit()
+
+            providers.generate_image_with_failover(
+                task_id=4242,
+                prompt="p",
+                mode="text",
+                ratio="1:1",
+                resolution="1K",
+                count=1,
+                quality="auto",
+                output_format="png",
+                reference_images=[],
+                model="gpt-image-2",
+            )
+
+        assert recorded, "成功调用应当写一条埋点"
+        assert recorded[0]["task_id"] == 4242

@@ -126,7 +126,11 @@ def _failure_rate(calls: int, failed: int) -> float:
 
 
 def _health_status(*, enabled: bool, calls: int, failure_rate: float, disabled_at: str) -> str:
-    if not enabled or disabled_at:
+    # ``enabled`` 是权威开关。``disabled_at`` 只是一个历史诊断时间戳：
+    # 管理员手动重新启用渠道时（``save_provider``）不会清它，所以它非空
+    # 只说明"这个渠道历史上被自动停用过"，并不代表现在不可用。早期版本
+    # 把二者并列判定，导致刚成功出片、成功率 100% 的渠道被显示成"异常"。
+    if not enabled:
         return "critical"
     if not calls:
         return "unknown"
@@ -301,7 +305,7 @@ def channel_health(window_hours: int = 24) -> dict:
                 rate = _failure_rate(calls, failed)
                 note = "该渠道暂无逐次调用记录，以上为任务级统计"
                 status = "warning" if failed else "healthy"
-                if not enabled or disabled_at:
+                if not enabled:
                     status = "critical"
             else:
                 note = "窗口内无调用数据，无法判断健康度"
