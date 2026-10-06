@@ -1,5 +1,12 @@
 # VM Staging Deployment
 
+> ⚠️ **已废弃（2026-10-07）**：本文描述的 systemd + Nginx 直连 + `deploy/` 下
+> 部署脚本的形态已不存在。`deploy/huishi.service`、`deploy/huishi-worker@.service`、
+> `deploy/nginx-huishi.local.conf` 等文件已从仓库删除，照本文 `cp` 会直接失败。
+> 现役形态是 Docker Compose（见 `DEPLOY.md`），服务由 compose 管理，生产上
+> 没有 huishi systemd 单元。历史文件清单与安全头配置见
+> `docs/legacy-baremetal-notes.md`。本文仅作历史记录保留。
+
 目标：VM staging 与正式上线版本保持同一运行形态。两者都使用 Linux、PostgreSQL、Redis/RQ、Gunicorn、Nginx HTTPS、systemd 和 `HUISHI_ENV=production`。区别只允许是数据库名、域名、密钥、API key 和业务数据。
 
 当前 VM：

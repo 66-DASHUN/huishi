@@ -237,16 +237,22 @@ docker compose -f compose.prod.yml exec -T backend python -m pytest tests/ -q
 
 ---
 
-## 7. 待清理项
+## 7. 历史遗留（已于 2026-10-07 清理）
 
-以下文件属于 systemd / 裸机时代的遗留，与当前 compose 形态不兼容：
+systemd / 裸机时代的文件已全部删除。原本存在的风险是：`deploy/` 里那些
+脚本看起来仍可用，实际在 compose 架构下**第一步就失败**（依赖
+`/opt/huishi/.venv` 与 `systemctl`，且文件清单含仓库中不存在的条目）。
 
-- `deploy/huishi*.service`、`deploy/huishi-*.timer`（8 个 systemd 单元）
-- `deploy/nginx-huishi.local.conf`（域名 `huishi.local` 已过时）
-- `deploy/prepare-huishi-agent.sh`
-- `deploy/deploy-vm-staging.ps1` + `deploy/vm-staging-bootstrap.sh`
-- `deploy/deploy_backend_release.sh`、`deploy/deploy_canvas_release.sh`
-  —— 清单里含 4 个仓库中不存在的文件（`.env.example`、`package.json`、
-  `README.md`、`tailwind.home.config.js`），在 `set -e` + `test -f` 下
-  **当前必然执行失败**
-- `deploy/huishi-banana-20260831.tar.gz`（一次性热修包）
+删除的清单与每项的失效原因，以及其中**仍有参考价值**的内容
+（Nginx 安全头、反向代理转发头、日志脱敏的正则注意点），
+已归档到 `docs/legacy-baremetal-notes.md`。
+
+**`deploy/` 现在只包含三样东西**：
+
+| 路径 | 用途 |
+|---|---|
+| `deploy/container/backend.Dockerfile` | **现役**构建入口（`compose.prod.yml` 的 backend 与 worker 都引用它） |
+| `deploy/release_template/` | 新发布用的 `prepare.sh` / `deploy.sh` 模板（含前置校验） |
+| `deploy/release_index.py` | 生成服务器侧 `releases/index.json` 的脚本 |
+
+发布历史清单见仓库根的 `RELEASES.md`。

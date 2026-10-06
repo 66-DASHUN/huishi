@@ -5,7 +5,7 @@
 ## 总体状态
 
 ```
-773 passed, 0 failed, 0 skipped
+758 passed, 0 failed, 0 skipped
 ```
 
 历史对照：
@@ -14,9 +14,26 @@
 |---|---|---|
 | 2026-10-05 | `49 failed, 651 passed, 61 skipped` | 失败全部判定为"测试未跟上代码演进" |
 | 2026-10-06 | `47 failed, 665 passed, 61 skipped` | 新增渠道健康度埋点后，2 个旧失败转绿 |
-| **2026-10-07** | **`773 passed, 0 failed, 0 skipped`** | **清理全部遗留失败 + 消除静默跳过** |
+| **2026-10-07** | **`758 passed, 0 failed, 0 skipped`** | **清理全部遗留失败 + 消除静默跳过**；随后 E1 删掉 27 个已失效用例、E2 新增 4 个，详见下方「为什么 773 → 758」 |
 
 **发布门禁规则：全量必须是 `0 failed`。** 任何上升都说明引入了真回归。
+
+### 为什么 773 → 758
+
+数字下降是**清理**，不是回归：
+
+| 变更 | 用例数 |
+|---|---|
+| E1 删除 `tests/test_deploy_release_scripts.py`（15 个）、`tests/test_deployment_assets.py`（12 个） | −27 |
+| E2 为 `pg_dump` 入口守卫、口令脱敏新增用例（`tests/test_backup.py`） | +4 |
+| E2 把 1 个旧断言改为更细粒度的断言（失败报文由"只记异常类型名"改为"记录真实原因 + 已脱敏"） | ±0 |
+| **合计** | **758** |
+
+那 27 个用例断言的是 systemd 时代的发布脚本清单（`deploy/deploy_backend_release.sh`
+等），而这批脚本本身已删除——脚本没了，断言其内容的测试也就失去对象。它们
+承载的发布契约由 `deploy/release_template/` + `deploy/release_index.py` 承接。
+
+**判据是 `0 failed` 且不存在"原本通过、现在变红"的用例，不是总数。**
 
 ## 本轮做了什么
 
