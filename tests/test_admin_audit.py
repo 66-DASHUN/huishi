@@ -214,27 +214,33 @@ def test_invite_lifecycle_writes_audits(client, login_admin, target_user_id, app
 
 def test_billing_and_package_mutations_write_audits(client, login_admin, app):
     login_admin(client)
+    # 计费页现在只承载视频规格的快速编辑（图片/音频定价在「模型与定价」），
+    # 因此这里要按视频价规则表构造表单，并带上 action 字段——旧测试发的是
+    # 图片定价字段，路由无法识别，不会产生审计记录。
     with app.app_context():
-        rule = get_db().execute("SELECT * FROM pricing_rules ORDER BY id LIMIT 1").fetchone()
+        rule = get_db().execute("SELECT * FROM video_pricing_rules ORDER BY id LIMIT 1").fetchone()
 
     billing = client.post(
         "/admin/config/billing",
         data={
-            "mode": rule["mode"],
+            "action": "video_price",
+            "model": rule["model"],
             "resolution": rule["resolution"],
-            "points_per_image": str(int(rule["points_per_image"]) + 1),
+            "billing_unit": rule["billing_unit"],
+            "duration_seconds": str(rule["duration_seconds"]),
+            "points": str(int(rule["points"]) + 1),
             "enabled": "on",
         },
     )
     created = client.post(
         "/admin/config/packages",
-        data={"name": "审计套餐", "price": "9.90", "points": "90", "description": "audit", "enabled": "on"},
+        data={"name": "审计套餐", "price": "9.90", "points": "990", "description": "audit", "enabled": "on"},
     )
     with app.app_context():
         package_id = int(get_db().execute("SELECT id FROM packages WHERE name = '审计套餐'").fetchone()["id"])
     updated = client.post(
         f"/admin/packages/{package_id}",
-        data={"name": "审计套餐 2", "price": "12.00", "points": "120", "description": "updated", "enabled": "on"},
+        data={"name": "审计套餐 2", "price": "12.00", "points": "1200", "description": "updated", "enabled": "on"},
     )
     deleted = client.post(f"/admin/packages/{package_id}/delete")
 
@@ -258,9 +264,15 @@ def test_billing_config_shows_friendly_name_and_exact_model_id_in_a_table(client
 
     assert response.status_code == 200
     assert "<table" in page
-    assert "模型 ID" in page
-    assert "Nano Banana Pro" in page
-    assert "gemini-3-pro-image" in page
+    # 该页现只保留视频规格的快速查看与编辑；图片/音频与已上架模型的价格
+    # 在「模型与定价」(/admin/config/settings) 维护，因此展示名与真实模型 ID
+    # 的对照关系也移到那里。
+    assert "视频模型定价" in page
+    assert "计费方式" in page
+
+    settings = client.get("/admin/config/settings").get_data(as_text=True)
+    assert "Nano Banana Pro" in settings
+    assert "gemini-3-pro-image" in settings
 
 
 def test_billing_rule_requires_at_least_one_point(client, login_admin, app):

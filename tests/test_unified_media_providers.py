@@ -86,7 +86,12 @@ def test_save_provider_round_trips_capabilities_models_and_settings(app):
         )
         provider = next(item for item in list_providers("video") if item["id"] == provider_id)
         assert provider["capabilities"] == ["video"]
-        assert provider["models"] == [{"id": "MiniMax-Hailuo-3.0", "label": "MiniMax 3"}]
+        # 单能力渠道（这里 provider_type="video"）的模型条目会由
+        # normalize_provider_models 显式补上 media_type；混合渠道则保持
+        # 未分类，等管理员在模型编辑器里选择。这是刻意的存储形态。
+        assert provider["models"] == [
+            {"id": "MiniMax-Hailuo-3.0", "label": "MiniMax 3", "media_type": "video"}
+        ]
         assert provider["settings"]["poll_interval"] == 4
         assert provider["api_key"] == "test-video-key"
 

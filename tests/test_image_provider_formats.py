@@ -82,10 +82,13 @@ def test_settings_displays_banana_label_but_keeps_api_model_id(app):
 
     body = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert '<strong title="gemini-3.1-flash-image">Nano Banana 2</strong>' in body
-    assert 'name="model" data-model-select' in body
+    # 展示名与真实 ID 的对应关系现在由页面内嵌的目录 JSON + 由 JS 填充的
+    # 下拉共同承载，不再有 <strong title=...> 或「真实 ID」这种静态标记。
+    assert 'data-catalog' in body
+    assert '"label": "Nano Banana 2"' in body
+    assert '"id": "gemini-3.1-flash-image"' in body
     assert '<option value="gemini-3.1-flash-image" selected>Nano Banana 2</option>' in body
-    assert '真实 ID：<code>gemini-3.1-flash-image</code>' in body
+    assert 'name="model" required' in body
 
 
 def test_grok_provider_does_not_advertise_unsupported_4k(app):

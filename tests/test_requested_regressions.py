@@ -59,8 +59,11 @@ def test_image_nodes_do_not_render_reference_badge_over_picture():
 def test_canvas_toolbar_centers_in_available_section_after_agent_closes():
     source = read(CANVAS / "[id]/canvas-client-page.tsx")
     toolbar = source[source.index("<CanvasToolbar") : source.index("</section>", source.index("<CanvasToolbar"))]
-    assert "zoomControls={<CanvasZoomControls" in toolbar
+    # 缩放控件不再作为 toolbar 的属性注入（现传 null），而是与工具栏并列渲染；
+    # 工具栏本身仍是居中布局，不再使用 leftGutter。
+    assert "zoomControls={null}" in toolbar
     assert "leftGutter" not in toolbar
+    assert "<CanvasZoomControls" in source
 
 
 def test_workspace_theme_selector_is_a_single_toggle_button():

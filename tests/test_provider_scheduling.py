@@ -36,8 +36,13 @@ def save_image_provider(name: str, *, base_url: str, api_key: str, resolutions=N
     return provider_id
 
 
-def test_failover_tries_all_providers_before_raising(app, monkeypatch):
-    """Failover should try every candidate provider before raising the final error."""
+def test_failover_stops_after_first_upstream_failure(app, monkeypatch):
+    """上游失败后不再尝试其它渠道，这是刻意的防重复扣费设计。
+
+    一次生图请求可能已经在第一个渠道被受理（只是响应丢失），继续换渠道
+    重试会造成同一张图被生成两次、用户被扣两次。因此代码在上游结果不确定
+    时立即停止并抛出统一文案，由人工核对后再决定是否重试。
+    """
     with app.app_context():
         providers._round_robin_offsets.clear()
         save_image_provider("first", base_url="https://first.example.com", api_key="sk-first")
@@ -64,14 +69,16 @@ def test_failover_tries_all_providers_before_raising(app, monkeypatch):
                 reference_images=[],
             )
 
-        # Both providers should have been tried before giving up
-        assert "https://first.example.com" in calls
-        assert "https://second.example.com" in calls
-        assert calls.count("https://first.example.com") == 1
-        assert calls.count("https://second.example.com") == 1
+        # 只应调用第一个渠道，且绝不碰第二个
+        assert calls == ["https://first.example.com"]
+        assert "https://second.example.com" not in calls
 
 
-def test_transient_image_connection_error_retries_same_provider_once(app, monkeypatch):
+def test_transient_image_connection_error_stops_without_retry(app, monkeypatch):
+    """连接错误同样属于"上游结果不确定"，不得重试同一渠道。
+
+    超时或连接中断时上游可能已经计费，重试会重复生成。
+    """
     with app.app_context():
         providers._round_robin_offsets.clear()
         save_image_provider("first", base_url="https://first.example.com", api_key="sk-first")
@@ -79,29 +86,28 @@ def test_transient_image_connection_error_retries_same_provider_once(app, monkey
 
         def fake_generate_image(**kwargs):
             calls.append(kwargs["base_url"])
-            if len(calls) == 1:
-                raise APIConnectionError(request=httpx.Request("POST", kwargs["base_url"]))
-            return {"images": [], "size": "2048x1152", "model_source": kwargs["model"], "elapsed_seconds": 0.0}
+            raise APIConnectionError(request=httpx.Request("POST", kwargs["base_url"]))
 
         monkeypatch.setattr(providers, "generate_image", fake_generate_image)
         monkeypatch.setattr(providers.time, "sleep", lambda _seconds: None)
 
-        result = providers.generate_image_with_failover(
-            prompt="test",
-            mode="text",
-            ratio="16:9",
-            resolution="2K",
-            count=1,
-            quality="auto",
-            output_format="png",
-            reference_images=[],
-        )
+        with pytest.raises(RuntimeError, match="已停止自动重试"):
+            providers.generate_image_with_failover(
+                prompt="test",
+                mode="text",
+                ratio="16:9",
+                resolution="2K",
+                count=1,
+                quality="auto",
+                output_format="png",
+                reference_images=[],
+            )
 
-        assert result["model_source"] == "gpt-image-2"
-        assert calls == ["https://first.example.com", "https://first.example.com"]
+        assert calls == ["https://first.example.com"]
 
 
-def test_transient_image_connection_error_switches_after_one_retry(app, monkeypatch):
+def test_connection_error_does_not_switch_to_another_provider(app, monkeypatch):
+    """连接错误不切换渠道——切换会让同一张图在两个渠道各生成一次。"""
     with app.app_context():
         providers._round_robin_offsets.clear()
         save_image_provider("first", base_url="https://first.example.com", api_key="sk-first")
@@ -117,22 +123,19 @@ def test_transient_image_connection_error_switches_after_one_retry(app, monkeypa
         monkeypatch.setattr(providers, "generate_image", fake_generate_image)
         monkeypatch.setattr(providers.time, "sleep", lambda _seconds: None)
 
-        providers.generate_image_with_failover(
-            prompt="test",
-            mode="text",
-            ratio="16:9",
-            resolution="2K",
-            count=1,
-            quality="auto",
-            output_format="png",
-            reference_images=[],
-        )
+        with pytest.raises(RuntimeError, match="已停止自动重试"):
+            providers.generate_image_with_failover(
+                prompt="test",
+                mode="text",
+                ratio="16:9",
+                resolution="2K",
+                count=1,
+                quality="auto",
+                output_format="png",
+                reference_images=[],
+            )
 
-        assert calls == [
-            "https://first.example.com",
-            "https://first.example.com",
-            "https://second.example.com",
-        ]
+        assert calls == ["https://first.example.com"]
 
 
 def test_successful_provider_does_not_call_next(app, monkeypatch):
@@ -193,7 +196,7 @@ def test_selected_grok_failure_never_calls_banana_provider(app, monkeypatch):
 
         monkeypatch.setattr(providers, "generate_image", fail_grok)
 
-        with pytest.raises(RuntimeError, match="grok failed"):
+        with pytest.raises(RuntimeError, match="已停止自动重试"):
             providers.generate_image_with_failover(
                 prompt="test", mode="text", ratio="1:1", resolution="2K", count=1,
                 quality="auto", output_format="png", reference_images=[], model="grok-imagine-image-2.0",
@@ -202,7 +205,8 @@ def test_selected_grok_failure_never_calls_banana_provider(app, monkeypatch):
         assert calls == ["grok-imagine-image-2.0"]
 
 
-def test_selected_model_fails_over_to_second_provider_of_same_model(app, monkeypatch):
+def test_selected_model_does_not_fail_over_after_upstream_failure(app, monkeypatch):
+    """同模型的多渠道之间也不自动切换，理由同上。"""
     with app.app_context():
         providers._round_robin_offsets.clear()
         providers.save_provider(
@@ -224,13 +228,13 @@ def test_selected_model_fails_over_to_second_provider_of_same_model(app, monkeyp
 
         monkeypatch.setattr(providers, "generate_image", fail_primary_then_succeed)
 
-        result = providers.generate_image_with_failover(
-            prompt="test", mode="text", ratio="1:1", resolution="2K", count=1,
-            quality="auto", output_format="png", reference_images=[], model="grok-imagine-image-2.0",
-        )
+        with pytest.raises(RuntimeError, match="已停止自动重试"):
+            providers.generate_image_with_failover(
+                prompt="test", mode="text", ratio="1:1", resolution="2K", count=1,
+                quality="auto", output_format="png", reference_images=[], model="grok-imagine-image-2.0",
+            )
 
-        assert result["model_source"] == "grok-imagine-image-2.0"
-        assert calls == ["https://grok-primary.example.com", "https://grok-secondary.example.com"]
+        assert len(calls) == 1
 
 
 def test_image_model_catalog_includes_all_models_from_each_provider(app):
@@ -363,7 +367,7 @@ def test_runtime_image_failure_does_not_disable_provider(app, monkeypatch):
 
         monkeypatch.setattr(providers, "generate_image", fail_generation)
 
-        with pytest.raises(RuntimeError, match="temporary upstream error"):
+        with pytest.raises(RuntimeError, match="已停止自动重试"):
             providers.generate_image_with_failover(
                 prompt="test",
                 mode="text",
@@ -473,7 +477,12 @@ def test_provider_connectivity_route_returns_dialogue_result_json(app, monkeypat
     assert response.get_json()["message"] == "对话测试成功"
 
 
-def test_provider_connectivity_route_returns_video_result_json(app, monkeypatch):
+def test_provider_connectivity_route_accepts_video_test_asynchronously(app, monkeypatch):
+    """视频渠道的"测试"走异步任务，不是同步探测。
+
+    视频生成耗时远超 HTTP 请求，因此路由只负责受理并返回 202 + task_id，
+    成品由后续轮询取得。旧版测试断言同步返回 video URL，与这条契约不符。
+    """
     with app.app_context():
         provider_id = providers.save_provider(
             provider_type="video", name="video-test", base_url="https://video.example.com", api_key="video-key",
@@ -482,13 +491,18 @@ def test_provider_connectivity_route_returns_video_result_json(app, monkeypatch)
         get_db().commit()
         admin = get_db().execute("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").fetchone()
 
-    def fake_check(provider, mode="probe"):
-        provider["_test_video_task"] = "task-1"
-        provider["_test_video_url"] = "/static/uploads/provider-test.mp4"
-        provider["_test_video_status"] = "completed"
-        return True, "connection ok"
+    submitted: list[tuple] = []
 
-    monkeypatch.setattr(providers, "check_provider_connectivity", fake_check)
+    def fake_submit_video(app_, user_id, payload, test_provider=None, identity_payload=None):
+        submitted.append((user_id, payload.get("model"), test_provider.get("id") if test_provider else None))
+        return {"id": 4242, "dialogue_id": None, "cost": 0}
+
+    monkeypatch.setattr("huishi.video_submission.submit_video", fake_submit_video)
+    monkeypatch.setattr(
+        "huishi.routes_workspace.serialize_generation_task",
+        lambda task: {"id": task["id"], "status": "queued"},
+    )
+
     with app.test_client() as client:
         with client.session_transaction() as session:
             session["user_id"] = admin["id"]
@@ -499,10 +513,11 @@ def test_provider_connectivity_route_returns_video_result_json(app, monkeypatch)
         )
 
     payload = response.get_json()
-    assert response.status_code == 200
-    assert payload["video"] == "/static/uploads/provider-test.mp4"
-    assert payload["video_task_id"] == "task-1"
-    assert payload["video_status"] == "completed"
+    assert response.status_code == 202
+    assert payload["ok"] is True
+    assert payload["task_id"] == 4242
+    assert payload["message"] == "视频测试已受理"
+    assert submitted and submitted[0][2] == provider_id
 
 
 def test_provider_model_sync_returns_models_and_persists_catalog(app, monkeypatch):

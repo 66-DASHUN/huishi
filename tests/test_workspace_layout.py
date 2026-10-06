@@ -48,7 +48,11 @@ def test_workspace_creation_type_uses_compact_vertical_picker():
     assert 'data-generation-mode-trigger' in template
     assert 'data-generation-mode-menu' in template
     assert 'role="listbox"' in template
-    assert template.count('role="option"') == 4
+    # 生成模式菜单固定 4 项（图片/视频/音乐/语音）。页面上另有"参考类型"
+    # 菜单，因此全模板的 role="option" 总数会更多——这里只约束生成模式的
+    # 那个 listbox，避免把无关菜单的增删也算进来。
+    mode_menu = template.split('data-generation-mode-menu', 1)[1].split("</div>", 1)[0]
+    assert mode_menu.count('role="option"') == 4
     assert 'class="generation-mode-tabs"' not in template
     assert 'const generationModePicker' in source
     assert 'function syncGenerationModePicker()' in source

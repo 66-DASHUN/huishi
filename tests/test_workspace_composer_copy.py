@@ -62,9 +62,11 @@ def test_reference_material_tiles_keep_unique_stack_positions_past_five_items():
     source = Path("static/js/workspace.js").read_text(encoding="utf-8")
     css = Path("static/css/site.css").read_text(encoding="utf-8")
 
-    assert "referenceMaterials.forEach((item, index) =>" in source
+    # 渲染用的是"可见素材"列表的本地别名 materials（referenceMaterials 全量，
+    # 视频模式会过滤），因此断言渲染循环按顺序写入 --stack-index。
+    assert "materials.forEach((item, index) =>" in source
     assert 'tile.style.setProperty("--stack-index", String(index));' in source
-    assert 'referenceStack?.style.setProperty("--reference-count", String(referenceMaterials.length || 1));' in source
+    assert 'referenceStack?.style.setProperty("--reference-count", String(materials.length || 1));' in source
     assert 'referenceStack?.style.setProperty("--reference-expanded-width"' in source
     assert ".reference-material-tile:nth-child(n+5)" not in css
     assert "min(var(--reference-expanded-width, 118px), 72vw)" in css
@@ -76,7 +78,8 @@ def test_reference_material_over_limit_reports_error_instead_of_silent_truncatio
     overflow_guard = source.index("if (incoming.length > available)")
     slice_call = source.index("incoming.slice(0, available).forEach")
     assert overflow_guard < slice_call
-    assert "setStatus(`参考图最多支持 ${maxReferenceImages} 张`, true);" in source
+    # 文案统一为"参考素材…项"（视频/图片共用同一上限语义）。
+    assert "setStatus(`参考素材最多支持 ${maxReferenceImages} 项`, true);" in source
     assert "return false;" in source[overflow_guard:slice_call]
 
 

@@ -38,6 +38,42 @@ def login(client, user_id: int) -> None:
         session["user_id"] = user_id
 
 
+def make_image_provider() -> int:
+    """Create the platform image channel these /generate tests need.
+
+    Since the billing contract is per-model (a request without ``model`` is
+    rejected on purpose), a test that posts ``model="gpt-image-2"`` must also
+    configure a channel that actually serves it -- otherwise the route fails
+    earlier with 「所选生图模型未启用」 and the behaviour under test is never
+    reached. Idempotent so a test can call it more than once.
+    """
+    from huishi.providers import save_provider
+
+    existing = get_db().execute(
+        "SELECT id FROM api_providers WHERE name='test-image-channel'"
+    ).fetchone()
+    if existing is not None:
+        return int(existing["id"])
+    provider_id = save_provider(
+        provider_type="image",
+        name="test-image-channel",
+        base_url="https://image.example",
+        api_key="platform-key",
+        model="gpt-image-2",
+        api_format="openai",
+        priority=10,
+        enabled=True,
+        resolutions=["1K", "2K", "4K"],
+        models=[
+            {"id": "gpt-image-2", "label": "GPT Image 2"},
+            {"id": "gpt-image-2.5-flare", "label": "GPT Image 2.5 Flare"},
+            {"id": "gpt-image-2.5-sunburst", "label": "GPT Image 2.5 Sunburst"},
+        ],
+    )
+    get_db().commit()
+    return int(provider_id)
+
+
 def test_reference_upload_accepts_jpg_mimetype_alias():
     file_storage = FileStorage(
         stream=BytesIO(b"jpg"),
@@ -66,6 +102,7 @@ def test_generate_rejects_when_user_reaches_active_task_limit(app, monkeypatch):
 
     with app.app_context():
         user_id = create_user(points=20)
+        make_image_provider()
         get_db().execute(
             """
             INSERT INTO generation_tasks
@@ -87,6 +124,7 @@ def test_generate_rejects_when_user_reaches_active_task_limit(app, monkeypatch):
             "/generate",
             data={
                 "prompt": "new generation",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -118,6 +156,7 @@ def test_reference_generation_uses_saved_reference_path(app, monkeypatch):
 
     with app.app_context():
         user_id = create_user()
+        make_image_provider()
         upload_dir = app.config["OUTPUT_DIR"]
         upload_dir.mkdir(parents=True, exist_ok=True)
         (upload_dir / "ref.png").write_bytes(
@@ -146,6 +185,7 @@ def test_reference_generation_uses_saved_reference_path(app, monkeypatch):
             "/generate",
             data={
                 "prompt": "use reference",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -273,6 +313,7 @@ def test_generate_without_dialogue_does_not_create_dialogue(app, monkeypatch):
 
     with app.app_context():
         user_id = create_user()
+        make_image_provider()
 
     monkeypatch.setattr(
         "huishi.generation_queue.generate_image_with_failover",
@@ -285,6 +326,7 @@ def test_generate_without_dialogue_does_not_create_dialogue(app, monkeypatch):
             "/generate",
             data={
                 "prompt": "standalone generation",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -320,6 +362,7 @@ def test_generate_with_create_dialogue_flag_creates_dialogue(app, monkeypatch):
 
     with app.app_context():
         user_id = create_user()
+        make_image_provider()
 
     monkeypatch.setattr(
         "huishi.generation_queue.generate_image_with_failover",
@@ -332,6 +375,7 @@ def test_generate_with_create_dialogue_flag_creates_dialogue(app, monkeypatch):
             "/generate",
             data={
                 "prompt": "new dialogue",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -362,6 +406,7 @@ def test_generate_with_create_dialogue_flag_creates_dialogue(app, monkeypatch):
 def test_generate_rolls_back_dialogue_when_task_creation_fails(app, monkeypatch):
     with app.app_context():
         user_id = create_user()
+        make_image_provider()
 
     def fail_create_generation_task(**kwargs):
         raise ValueError("task creation failed")
@@ -374,6 +419,7 @@ def test_generate_rolls_back_dialogue_when_task_creation_fails(app, monkeypatch)
             "/generate",
             data={
                 "prompt": "rollback generation",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -409,6 +455,7 @@ def test_generate_locks_user_before_reserving_generation_task(app, monkeypatch):
 
     with app.app_context():
         user_id = create_user(points=20)
+        make_image_provider()
 
     monkeypatch.setattr("huishi.routes_workspace.enqueue_generation_task", fake_enqueue_generation_task)
     monkeypatch.setattr("huishi.routes_workspace.lock_user_for_update", track_lock)
@@ -419,6 +466,7 @@ def test_generate_locks_user_before_reserving_generation_task(app, monkeypatch):
             "/generate",
             data={
                 "prompt": "lock before reservation",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -449,6 +497,7 @@ def test_generate_locks_user_before_transactional_reservation_checks(app, monkey
 
     with app.app_context():
         user_id = create_user(points=20)
+        make_image_provider()
 
     monkeypatch.setattr("huishi.routes_workspace.enqueue_generation_task", fake_enqueue_generation_task)
     monkeypatch.setattr("huishi.routes_workspace.lock_user_for_update", track_lock)
@@ -461,6 +510,7 @@ def test_generate_locks_user_before_transactional_reservation_checks(app, monkey
             "/generate",
             data={
                 "prompt": "lock order",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -480,6 +530,7 @@ def test_generate_marks_task_failed_when_enqueue_fails_after_commit(app, monkeyp
 
     with app.app_context():
         user_id = create_user(points=20)
+        make_image_provider()
 
     monkeypatch.setattr("huishi.routes_workspace.enqueue_generation_task", fail_enqueue_generation_task)
 
@@ -489,6 +540,7 @@ def test_generate_marks_task_failed_when_enqueue_fails_after_commit(app, monkeyp
             "/generate",
             data={
                 "prompt": "enqueue fails",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -575,6 +627,7 @@ def test_generate_with_new_workspace_dialogue_creates_dialogue(app, monkeypatch)
 
     with app.app_context():
         user_id = create_user()
+        make_image_provider()
 
     monkeypatch.setattr(
         "huishi.generation_queue.generate_image_with_failover",
@@ -587,6 +640,7 @@ def test_generate_with_new_workspace_dialogue_creates_dialogue(app, monkeypatch)
             "/generate",
             data={
                 "prompt": "new workspace dialogue",
+                "model": "gpt-image-2",
                 "ratio": "16:9",
                 "resolution": "2K",
                 "quality": "auto",
@@ -901,6 +955,7 @@ def test_regenerate_asset_uses_provider_failover_for_platform_key(app, monkeypat
 
     with app.app_context():
         user_id = create_user(points=20)
+        make_image_provider()
         record_id = get_db().execute(
             """
             INSERT INTO records

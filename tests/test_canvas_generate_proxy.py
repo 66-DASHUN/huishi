@@ -27,6 +27,38 @@ def app(tmp_path: Path):
     return app
 
 
+def _ensure_image_provider() -> int:
+    """画布生图/预估都需要一个启用的平台图片渠道才能解析模型与定价。
+
+    定价是模型级的（缺 model 或不存在的模型会被 400 拦下），所以这些测试
+    必须同时配置渠道并显式传 model。幂等，可重复调用。
+    """
+    from huishi.providers import save_provider
+
+    existing = get_db().execute(
+        "SELECT id FROM api_providers WHERE name='canvas-test-channel'"
+    ).fetchone()
+    if existing is not None:
+        return int(existing["id"])
+    provider_id = save_provider(
+        provider_type="image",
+        name="canvas-test-channel",
+        base_url="https://image.example",
+        api_key="platform-key",
+        model="gpt-image-2",
+        api_format="openai",
+        priority=10,
+        enabled=True,
+        resolutions=["1K", "2K", "4K"],
+        models=[
+            {"id": "gpt-image-2", "label": "GPT Image 2"},
+            {"id": "grok-imagine-image-2.0", "label": "grok-imagine 2.0"},
+        ],
+    )
+    get_db().commit()
+    return int(provider_id)
+
+
 def _create_user(points: int = 50, username: str = "testuser") -> int:
     cursor = get_db().execute(
         "INSERT INTO users (username, email, password_hash, role, email_verified, points, created_at) "
@@ -151,12 +183,13 @@ def test_canvas_generate_deducts_points_and_returns_images(app, monkeypatch):
 
     with app.app_context():
         user_id = _create_user(points=50)
+        _ensure_image_provider()
         token = _issue_token(user_id)
 
     with app.test_client() as client:
         resp = client.post(
             "/api/canvas/generate",
-            json={"token": token, "prompt": "a red circle", "ratio": "1:1", "resolution": "2K", "count": 1},
+            json={"token": token, "prompt": "a red circle", "ratio": "1:1", "resolution": "2K", "count": 1, "model": "gpt-image-2"},
             headers={"Origin": "http://127.0.0.1:3000"},
         )
 
@@ -179,18 +212,20 @@ def test_canvas_generate_passes_configured_count_and_bills_each_image(app, monke
     monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", fake_generate)
     with app.app_context():
         user_id = _create_user(points=50)
+        _ensure_image_provider()
         token = _issue_token(user_id)
 
     with app.test_client() as client:
         resp = client.post(
             "/api/canvas/generate",
-            json={"token": token, "prompt": "three variants", "count": 3},
+            json={"token": token, "prompt": "three variants", "count": 3, "model": "gpt-image-2"},
             headers={"Origin": "http://127.0.0.1:3000"},
         )
 
     assert resp.status_code == 200
     assert captured["count"] == 3
-    assert resp.get_json()["cost"] == 6
+    # gpt-image-2 的 2K 定价为 3 积分/张，3 张共 9（旧断言按 1K 的 2 分/张写）。
+    assert resp.get_json()["cost"] == 9
 
 
 def test_canvas_generate_uses_selected_model_for_generation_record_and_billing(app, monkeypatch):
@@ -334,12 +369,13 @@ def test_canvas_generate_creates_record_in_db(app, monkeypatch):
 
     with app.app_context():
         user_id = _create_user(points=50)
+        _ensure_image_provider()
         token = _issue_token(user_id)
 
     with app.test_client() as client:
         resp = client.post(
             "/api/canvas/generate",
-            json={"token": token, "prompt": "sunset", "ratio": "16:9", "resolution": "1K"},
+            json={"token": token, "prompt": "sunset", "ratio": "16:9", "resolution": "1K", "model": "gpt-image-2"},
             headers={"Origin": "http://127.0.0.1:3000"},
         )
 
@@ -433,35 +469,39 @@ def test_canvas_estimate_rejects_missing_token(app):
 def test_canvas_estimate_returns_platform_cost_and_balance(app):
     with app.app_context():
         user_id = _create_user(points=50)
+        _ensure_image_provider()
         token = _issue_token(user_id)
 
     with app.test_client() as client:
         resp = client.get(
             "/api/canvas/estimate",
-            query_string={"token": token, "resolution": "2K", "count": "3"},
+            query_string={"token": token, "resolution": "2K", "count": "3", "model": "gpt-image-2"},
             headers={"Origin": "http://127.0.0.1:3000"},
         )
 
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data == {"ok": True, "cost": 6, "billing_mode": "platform", "balance": 50}
+    # 2K 的 3 张：gpt-image-2 每张 3 积分 = 9。
+    assert data == {"ok": True, "cost": 9, "billing_mode": "platform", "balance": 50}
 
 
 def test_canvas_estimate_accepts_post_json_without_query_token(app):
     with app.app_context():
         user_id = _create_user(points=50)
+        _ensure_image_provider()
         token = _issue_token(user_id)
 
     with app.test_client() as client:
         resp = client.post(
             "/api/canvas/estimate",
-            json={"token": token, "resolution": "2K", "count": "3"},
+            json={"token": token, "resolution": "2K", "count": "3", "model": "gpt-image-2"},
             headers={"Origin": "http://127.0.0.1:3000"},
         )
 
     assert resp.status_code == 200
     data = resp.get_json()
-    assert data == {"ok": True, "cost": 6, "billing_mode": "platform", "balance": 50}
+    # 2K 的 3 张：gpt-image-2 每张 3 积分 = 9。
+    assert data == {"ok": True, "cost": 9, "billing_mode": "platform", "balance": 50}
 
 
 def test_canvas_estimate_uses_selected_model_price(app):
@@ -537,7 +577,7 @@ def test_canvas_estimate_returns_zero_cost_for_user_key_mode(app):
     with app.test_client() as client:
         resp = client.get(
             "/api/canvas/estimate",
-            query_string={"token": token, "resolution": "2K", "count": "3"},
+            query_string={"token": token, "resolution": "2K", "count": "3", "model": "gpt-image-2"},
             headers={"Origin": "http://127.0.0.1:3000"},
         )
 

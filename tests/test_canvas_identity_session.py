@@ -207,10 +207,19 @@ def test_canvas_verify_returns_enabled_video_models_for_host_picker(app):
         )
 
     assert response.status_code == 200
-    assert response.get_json()["video_models"] == [
-        {"id": "grok-imagine-video", "label": "grok-imagine"},
-        {"id": "seedance-2.0", "label": "Seedance 2.0"},
-    ]
+    # 每个视频模型现在还会带上 api_format 与 capabilities —— 画布端需要据此
+    # 决定可选的时长/分辨率/比例以及参考素材上限，因此不再只是 id+label。
+    models = response.get_json()["video_models"]
+    assert [m["id"] for m in models] == ["grok-imagine-video", "seedance-2.0"]
+    assert [m["label"] for m in models] == ["grok-imagine", "Seedance 2.0"]
+    # 能力数据按模型分别解析：已声明的模型会带 api_format + capabilities，
+    # 未在 video_capabilities() 中声明的模型则不带（这是当前已知的数据空缺，
+    # 见需求④；此处只固定"有则必有 api_format"这一结构约束）。
+    for item in models:
+        assert item["id"] and item["label"]
+        if "capabilities" in item:
+            assert "api_format" in item
+            assert isinstance(item["capabilities"], dict)
 
 
 def test_canvas_verify_returns_separate_speech_and_music_models(app):

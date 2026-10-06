@@ -38,7 +38,10 @@ def test_init_db_does_not_recreate_edited_default_packages(app):
 
     assert [dict(row) for row in rows] == [
         {"name": "专业包", "points": 1100, "count": 1},
-        {"name": "入门包", "points": 100, "count": 1},
+        # 入门包未被本测试改动，因此保持 DEFAULT_PACKAGES 的 990
+        # （1 积分 = 1 分；990 分定价对应 990 积分）。旧测试写 100，
+        # 是 990/90 那种不等值年代的数据。
+        {"name": "入门包", "points": 990, "count": 1},
         {"name": "创作包", "points": 450, "count": 1},
     ]
 
@@ -69,6 +72,9 @@ def test_init_db_removes_recreated_default_package_when_edited_version_exists(ap
 
     assert [dict(row) for row in rows] == [
         {"name": "专业包", "points": 1100, "count": 1},
-        {"name": "入门包", "points": 100, "count": 1},
+        # 入门包未被本测试改动，因此保持 DEFAULT_PACKAGES 的 990
+        # （1 积分 = 1 分；990 分定价对应 990 积分）。旧测试写 100，
+        # 是 990/90 那种不等值年代的数据。
+        {"name": "入门包", "points": 990, "count": 1},
         {"name": "创作包", "points": 450, "count": 1},
     ]

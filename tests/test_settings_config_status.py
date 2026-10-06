@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 from huishi.routes_workspace import _provider_config_status
@@ -93,13 +94,16 @@ def test_admin_config_settings_page_renders_image_resolution_checkboxes(tmp_path
 
     body = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'type="checkbox" name="resolutions" value="1K"' in body
-    assert 'type="checkbox" name="resolutions" value="2K"' in body
-    assert 'type="checkbox" name="resolutions" value="4K"' in body
+    # 分辨率不再由服务端渲染 checkbox：渠道与模型关联改由
+    # model-management.js 依据迁入页面的目录 JSON 动态生成。
+    # 这里断言的是"该能力仍被交付给前端"，而非某种已废弃的 DOM 形态。
+    assert 'type="application/json" id="image-provider-catalog"' in body
+    assert '"resolutions"' in body
     assert 'name="api_key" type="password"' in body
-    assert 'autocomplete="off"' in body
-    assert 'data-lpignore="true"' in body
-    assert "调用协议" in body
+    # 密码管理器抑制改为 autocomplete="new-password"：
+    # data-lpignore 是非标准属性，已随表单重构移除。
+    assert 'autocomplete="new-password"' in body
+    assert "默认接口协议" in body
     assert 'value="openai"' in body
     assert 'value="gemini"' in body
     assert 'value="grok"' in body
@@ -128,9 +132,11 @@ def test_admin_config_settings_uses_catalog_selects_and_safe_json_contract(tmp_p
 
     body = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'data-model-select' in body
-    assert 'data-custom-model-toggle' in body
-    assert 'data-model-id' in body
+    # 旧的三件套（data-model-select / data-custom-model-toggle / data-model-id）
+    # 已随内联表单重构移除，改由 mm-* 表格契约承载。
+    assert 'data-mm-connections' in body
+    assert 'data-mm-models' in body
+    assert 'data-mm-calls' in body
     assert 'type="application/json" id="image-provider-catalog"' in body
     assert 'grok-imagine 2.0' in body
     assert 'grok-imagine-image-2.0' in body
@@ -251,11 +257,11 @@ def test_admin_config_settings_page_shows_unified_canvas_generation_settings(tmp
     body = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "画布生成配置" in body
-    assert "画布生图" in body
     assert "在线助手" in body
     assert "计费规则" in body
     assert 'href="#settings-image"' in body
-    assert 'href="#settings-prompt"' in body
+    assert 'href="#settings-storage"' in body
+    assert 'href="#settings-runtime"' in body
 
 
 def test_admin_config_settings_page_uses_compact_tables(tmp_path):
@@ -276,7 +282,9 @@ def test_admin_config_settings_page_uses_compact_tables(tmp_path):
 
     body = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert 'class="config-table provider-config-table"' in body
+    # provider-config-table 是已删除的类名；渠道/模型/调用记录三张表
+    # 现在统一用 mm-table。
+    assert 'class="config-table mm-table"' in body
     assert 'class="config-table storage-config-table"' in body
     assert "settings-health-summary" not in body
     assert "settings-section-nav" not in body
@@ -568,8 +576,9 @@ def test_admin_config_billing_page_renders(tmp_path):
     body = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "计费规则" in body
-    assert "同时适用于工作台与画布" in body
-    assert "billing-rule-list" in body
+    assert "工作台与画布共用模型级定价" in body
+    assert "config-editor-list" in body
+    assert "视频模型定价" in body
     assert "config-overview-strip" not in body
 
 
@@ -703,7 +712,14 @@ def test_admin_config_pages_have_scoped_layout_repairs():
         ".admin-console-page .config-package-fields",
     ):
         assert selector in css
-    assert ".console-page" not in repair
+    # 作用域约束：这些配置选择器必须带 .admin-console-page 前缀，否则会外溢到用户侧。
+    # 注意其中一部分规则定义在 repair 段之外（更早的 admin 区块），因此对整个
+    # 样式表断言，而不是只对 repair 段断言。
+    for rule in (".config-shell", ".config-content", ".config-table", ".settings-dialog"):
+        assert f".admin-console-page {rule}" in css, rule
+    # repair 段自身不得出现行首无作用域限定的裸配置选择器。
+    for bare in (".config-shell", ".config-content", ".config-table"):
+        assert re.search(rf"(?m)^{re.escape(bare)}\s*[,{{]", repair) is None, bare
 
 
 def test_admin_settings_content_uses_available_desktop_width():

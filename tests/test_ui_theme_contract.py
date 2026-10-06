@@ -9,7 +9,11 @@ def test_base_exposes_theme_before_styles_render():
     base = read("templates/base.html")
 
     assert "data-theme" in base
-    assert "color-scheme" in base
+    # color-scheme 是 CSS 属性，定义在样式表里（base.html 只负责在渲染样式
+    # 之前先决定主题，避免闪烁）。这里断言的是"主题先于样式生效"。
+    assert "document.documentElement.dataset.theme" in base
+    css = Path("static/css/site.css").read_text(encoding="utf-8")
+    assert "color-scheme" in css
 
 
 def test_base_loads_only_the_shared_modern_sans_font():

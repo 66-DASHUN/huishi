@@ -88,7 +88,10 @@ def test_settings_page_lists_audio_provider_and_add_action(app):
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "MiniMax 音频" in body
-    assert "新增音频" in body
+    # 音频渠道不再有独立的「新增音频」按钮：统一走渠道弹窗的
+    # 「模型类型」下拉（语音合成 / 音乐生成）。
+    assert 'value="speech"' in body
+    assert 'value="music"' in body
     assert "语音合成" in body
     assert "音乐生成" in body
 

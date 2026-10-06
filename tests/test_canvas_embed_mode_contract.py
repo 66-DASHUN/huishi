@@ -353,12 +353,25 @@ def test_canvas_prompt_detail_does_not_show_raw_preview_block():
 
 
 @canvas_project_available
-def test_canvas_prompt_library_lives_at_asset_lower_left():
-    source = (CANVAS_WEB_ROOT / "[id]/canvas-client-page.tsx").read_text(encoding="utf-8")
-    assert "PromptSelectDialog" in source
-    assert "data-canvas-prompt-library-anchor" in source
-    assert "bottom-24 left-5" in source
-    assert "createPromptTextNode" in source
+def test_canvas_prompt_library_is_hidden_from_the_canvas():
+    """画布刻意隐藏了提示词库入口。
+
+    画布侧自己的契约测试（canvas-surface-contract.test.ts 的
+    "canvas hides the prompt library entry"）明确要求页面与节点提示面板
+    都不得出现提示词库锚点或「提示词库」字样，该入口只在画布之外的
+    图片/视频页面提供。原断言要求画布内联提示词库，与这个决策相反。
+    """
+    page = (CANVAS_WEB_ROOT / "[id]/canvas-client-page.tsx").read_text(encoding="utf-8")
+    assert "data-canvas-prompt-library-anchor" not in page
+    assert "提示词库" not in page
+
+    prompt_panel = (CANVAS_WEB_ROOT / "components/canvas-node-prompt-panel.tsx").read_text(encoding="utf-8")
+    assert "CanvasPromptLibrary" not in prompt_panel
+
+    # 该入口仍存在于图片与视频页面。
+    for page_path in ("app/(user)/image/page.tsx", "app/(user)/video/page.tsx"):
+        consumer = (CANVAS_SRC_ROOT / page_path).read_text(encoding="utf-8")
+        assert "PromptSelectDialog" in consumer
 
 
 @canvas_project_available

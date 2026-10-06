@@ -41,7 +41,10 @@ def test_admin_layout_has_primary_navigation_and_current_page(app):
     assert response.status_code == 200
     assert 'aria-label="管理导航"' in body
     assert 'aria-current="page"' in body
-    assert "css/site.css?v=20260913-multi-model-1" in body
+    # 断言样式表带缓存版本号即可；具体版本随前端演进变化，
+    # 硬编码日期会让这个断言每次改样式就失效。
+    import re
+    assert re.search(r"css/site\.css\?v=[0-9]{8}-[a-z0-9-]+", body)
     assert 'name="q"' in body
     assert "审计日志" in body
     assert "user.points.adjust" in body

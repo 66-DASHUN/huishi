@@ -50,4 +50,7 @@ def test_reference_mode_does_not_pass_output_format_to_images_edit(monkeypatch, 
         )
 
     assert "output_format" not in captured
-    assert client_kwargs["max_retries"] == 2
+    # 生图 POST 绝不隐式重试：超时或响应丢失时上游可能已经计费，
+    # 重试会造成重复生成与重复扣费。生产代码因此固定 max_retries=0，
+    # 不采纳配置里的 IMAGE_API_MAX_RETRIES。
+    assert client_kwargs["max_retries"] == 0

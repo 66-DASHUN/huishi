@@ -38,7 +38,12 @@ def test_banana_catalog_exposes_only_named_models_and_keeps_api_ids():
     assert image_model_label("custom-image-model") == "custom-image-model"
 
 
-def test_calculate_cost_prefers_exact_model_price_over_wildcard(app):
+def test_calculate_cost_requires_an_exact_model_price(app):
+    """定价是模型级的；没有通配符回退，未知模型必须报错。
+
+    旧规则允许 model='*' 兜底，migrate_pricing_contract 已刻意删除所有
+    通配符规则，因此回退路径不复存在。
+    """
     from huishi.billing import calculate_cost
 
     with app.app_context():
@@ -50,7 +55,8 @@ def test_calculate_cost_prefers_exact_model_price_over_wildcard(app):
         db.commit()
 
         assert calculate_cost("text", "2K", 1, model="gemini-test-model") == 7
-        assert calculate_cost("text", "2K", 1, model="unknown-model") == 2
+        with pytest.raises(ValueError, match="未找到计费规则"):
+            calculate_cost("text", "2K", 1, model="unknown-model")
 
 
 def test_deducts_independent_exact_prices_for_banana_pro_and_grok(app):
@@ -95,16 +101,21 @@ def test_calculate_cost_rejects_existing_zero_price_rule(app):
             calculate_cost("text", "2K", 1, model="gemini-3-pro-image")
 
 
-def test_pricing_schema_keeps_model_dimension_and_wildcard_defaults(app):
+def test_pricing_schema_keeps_model_dimension_and_no_wildcards(app):
+    """保留 model 维度，且不再存在通配符兜底规则。"""
     with app.app_context():
         columns = {row["name"] for row in get_db().execute("PRAGMA table_info(pricing_rules)").fetchall()}
-        wildcard = get_db().execute(
-            "SELECT model, points_per_image FROM pricing_rules WHERE mode = 'text' AND model = '*' AND resolution = '1K'"
+        wildcard_count = get_db().execute(
+            "SELECT COUNT(*) AS n FROM pricing_rules WHERE model = '*'"
+        ).fetchone()["n"]
+        exact = get_db().execute(
+            "SELECT points_per_image FROM pricing_rules"
+            " WHERE mode = 'text' AND model = 'gpt-image-2' AND resolution = '1K'"
         ).fetchone()
 
     assert "model" in columns
-    assert wildcard is not None
-    assert wildcard["points_per_image"] == 1
+    assert wildcard_count == 0
+    assert exact is not None and exact["points_per_image"] == 2
 
 
 @pytest.fixture()
@@ -170,12 +181,13 @@ def test_multi_image_generation_creates_one_ledger_entry_per_record(app):
         ledger = db.execute("SELECT delta, record_id FROM point_ledger ORDER BY id").fetchall()
         user = db.execute("SELECT points FROM users WHERE id = ?", (user_id,)).fetchone()
 
-        assert [row["points_charged"] for row in records] == [2, 2]
+        # 2560x1440 折算为 2K，gpt-image-2 的 2K 定价是 3 积分/张。
+        assert [row["points_charged"] for row in records] == [3, 3]
         assert [(row["delta"], row["record_id"]) for row in ledger] == [
-            (-2, records[0]["id"]),
-            (-2, records[1]["id"]),
+            (-3, records[0]["id"]),
+            (-3, records[1]["id"]),
         ]
-        assert user["points"] == 16
+        assert user["points"] == 14
 
 
 def test_finalize_generation_uses_transaction_helper(app, monkeypatch):
