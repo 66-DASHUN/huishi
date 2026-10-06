@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +11,55 @@ from typing import Callable
 
 
 Runner = Callable[..., subprocess.CompletedProcess]
+
+
+# 连接串里的口令绝不能进 status.json —— 该文件留在磁盘上、也可能被后台页面读走。
+# 注意捕获组只留 scheme://user:，把口令整段替换掉。
+_URL_PASSWORD_PATTERN = re.compile(r"(?P<prefix>[a-zA-Z][a-zA-Z0-9+.-]*://[^:/@\s]+):[^@/\s]*@")
+
+
+def redact_database_url(text: str) -> str:
+    """把连接串里的口令替换为 ***，其余原样保留。"""
+    return _URL_PASSWORD_PATTERN.sub(lambda m: f"{m.group('prefix')}:***@", text or "")
+
+
+def _pg_dump_failure_detail(exc: BaseException) -> str:
+    """提炼可行动的错误描述，并保证不泄露连接串口令。
+
+    只写异常类型名/只写 ``CalledProcessError`` 是没有信息量的——运维看到
+    status.json 里那一行无法判断是口令错了、库不存在，还是磁盘满了。
+    pg_dump 的真实原因在 stderr，所以优先取它；取不到再退回 str(exc)。
+    绝不用 ``exc.cmd``：那是完整命令行，含 DATABASE_URL。
+    """
+    detail = ""
+    if isinstance(exc, subprocess.CalledProcessError):
+        stderr = exc.stderr or b""
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", "replace")
+        detail = str(stderr).strip()
+    if not detail:
+        detail = str(exc).strip()
+    # 压缩成单行，避免 status.json 里塞进多行堆栈。
+    detail = " ".join(detail.split())
+    if len(detail) > 500:
+        detail = detail[:500] + "..."
+    return redact_database_url(detail)
+
+
+# backend 镜像基于 python:3.12-slim，只装了 ffmpeg —— 容器内**没有**
+# pg_dump。因此 `flask backup-postgres` 在这里必然失败。生产备份走宿主侧
+# 的 /usr/local/bin/huishi-db-backup（见 docs/product/runbooks/backup-restore.md）。
+PG_DUMP_MISSING_HINT = (
+    "容器内没有 pg_dump，无法在此执行 PostgreSQL 备份。"
+    "生产备份由宿主侧脚本 /usr/local/bin/huishi-db-backup 完成"
+    "（cron 每天 10:40 本地时间），恢复步骤见 "
+    "docs/product/runbooks/backup-restore.md。"
+)
+
+
+def pg_dump_available() -> bool:
+    """pg_dump 是否可在当前环境执行（用于在失败前给出可读原因）。"""
+    return shutil.which("pg_dump") is not None
 
 
 def build_pg_dump_command(database_url: str, target: Path) -> list[str]:
@@ -92,11 +143,18 @@ def create_backup(
     *,
     runner: Runner = subprocess.run,
     now: datetime | None = None,
+    probe: Callable[[], bool] = pg_dump_available,
 ) -> Path:
     if not database_url.startswith(("postgresql://", "postgres://")):
         raise ValueError("DATABASE_URL must point to PostgreSQL")
     if keep < 1:
         raise ValueError("keep must be at least 1")
+
+    # 显式前置检查：原先这里会直接 subprocess.run 失败，只在 status.json 里
+    # 留下一行 "pg_dump failed: FileNotFoundError"，运维看不出原因也无法行动。
+    if not probe():
+        write_status(backup_dir, ok=False, path=None, error="pg_dump not installed")
+        raise RuntimeError(PG_DUMP_MISSING_HINT)
 
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
@@ -125,6 +183,6 @@ def create_backup(
             backup_dir,
             ok=False,
             path=None,
-            error=f"pg_dump failed: {type(exc).__name__}",
+            error=f"pg_dump failed: {type(exc).__name__}: {_pg_dump_failure_detail(exc)}",
         )
         raise

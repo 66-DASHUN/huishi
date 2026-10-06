@@ -17,7 +17,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from huishi.auth import bp as auth_bp, login_required
 from huishi.admin_permissions import has_permission
 from huishi.backup import create_backup
-from huishi.config import Config, parse_size_bytes
+from huishi.config import (
+    DEFAULT_ADMIN_PASSWORD,
+    DEFAULT_SECRET_KEY,
+    Config,
+    parse_size_bytes,
+)
 from huishi.db import close_db, get_db, init_db
 from huishi.invites import create_invite_code
 from huishi import providers as provider_store
@@ -38,8 +43,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("huishi")
-DEFAULT_SECRET_KEY = "dev-change-me"
-DEFAULT_ADMIN_PASSWORD = "1qaz@WSX"
 DEFAULT_LOG_DIR = Path("logs")
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 LOCAL_TIMEZONE = timezone(timedelta(hours=8))

@@ -65,14 +65,24 @@ if os.environ.get("HUISHI_ENV", "").strip().lower() != "test":
     load_dotenv()
 
 
+# 开发/测试用的占位凭据。生产环境**必须**改成真实值，否则启动即失败
+# （见 app.py 中对 two DEFAULT_* 的校验）。
+#
+# 这两个值只有一处定义：早先 app.py 与 config.py 各写了一份字面量，
+# 改其中一处不会生效——校验用的是 app.py 那份，配置文件用的是这份，
+# 两边一旦漂移，"默认值检查"就会静默失效。现在 app.py 从这里导入。
+DEFAULT_SECRET_KEY = "dev-change-me"
+DEFAULT_ADMIN_PASSWORD = "1qaz@WSX"
+
+
 class Config:
     # --- production secrets ---
     # Flask 会话密钥；生产环境必须设置为强随机值。
-    SECRET_KEY = os.environ.get("HUISHI_SECRET_KEY", "dev-change-me")
+    SECRET_KEY = os.environ.get("HUISHI_SECRET_KEY", DEFAULT_SECRET_KEY)
     # 用于加密数据库中保存的 API Key、SMTP 密码等敏感配置。
     ENCRYPTION_KEY = os.environ.get("HUISHI_ENCRYPTION_KEY", "")
     # 首次初始化默认管理员密码；生产环境必须覆盖默认值。
-    ADMIN_PASSWORD = os.environ.get("HUISHI_ADMIN_PASSWORD", "1qaz@WSX")
+    ADMIN_PASSWORD = os.environ.get("HUISHI_ADMIN_PASSWORD", DEFAULT_ADMIN_PASSWORD)
 
     # --- storage paths ---
     # SQLite 数据库文件路径。
