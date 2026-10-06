@@ -66,7 +66,7 @@ if os.environ.get("HUISHI_ENV", "").strip().lower() != "test":
 
 
 # 开发/测试用的占位凭据。生产环境**必须**改成真实值，否则启动即失败
-# （见 app.py 中对 two DEFAULT_* 的校验）。
+# （见 app.py 中对两个 DEFAULT_* 常量的校验）。
 #
 # 这两个值只有一处定义：早先 app.py 与 config.py 各写了一份字面量，
 # 改其中一处不会生效——校验用的是 app.py 那份，配置文件用的是这份，
