@@ -311,6 +311,21 @@ def save_binary_image(data: bytes, name_hint: str = "image.png", *, expected_siz
 
 
 def images_from_payload(payload: dict[str, Any], *, expected_size: str = "", proxy_url: str = "") -> list[str]:
+    # 有些网关在路径写错时返回 HTTP 200 + 一个 HTML 落地页（或纯字符串），
+    # 而不是 JSON。不在这里拦住的话，下面 payload.get() 会抛 AttributeError，
+    # 而 AttributeError 不在 failover 捕获的异常里——结果既不切换下一个渠道、
+    # 也不写渠道埋点，用户只看到"生成结果保存失败"。
+    # 2026-10-06 渠道 ai.junze.me 即如此（base_url 缺 /v1）。
+    if not isinstance(payload, dict):
+        text = payload if isinstance(payload, str) else repr(payload)
+        if looks_like_html_response(text):
+            raise RuntimeError(
+                "生图接口返回了网页而不是图片数据，请检查 Base URL 是否指向 OpenAI 兼容图片接口"
+                "（常见原因：缺少 /v1 路径段）"
+            )
+        raise RuntimeError(
+            f"生图接口返回了不支持的数据格式（{type(payload).__name__}），期望 JSON 对象"
+        )
     image_paths = []
     for index, item in enumerate(payload.get("data", []), start=1):
         if not isinstance(item, dict):

@@ -650,3 +650,84 @@ class TestSaveProviderClearsStaleDisabledAt:
             ).fetchone()
             assert row["enabled"] == 0
             assert row["disabled_at"] == stamp
+
+
+class TestNonJsonUpstreamResponseIsHandled:
+    """上游返回网页/字符串时，必须抛可恢复的 RuntimeError。
+
+    线上 2026-10-06 渠道 ai.junze.me（base_url 缺 /v1）返回 HTTP 200 + 一个
+    New API 的 HTML 落地页。旧代码直接把它当 dict 用，抛
+    ``AttributeError: 'str' object has no attribute 'get'``——而
+    AttributeError **不在** failover 捕获的异常类型里，于是既不切换下一个
+    渠道、也不写渠道埋点，用户只看到"生成结果保存失败"。
+    """
+
+    def test_html_response_raises_runtime_error_with_actionable_message(self):
+        from huishi.image_api import images_from_payload
+
+        html = "<!doctype html>\n<html><head><title>New API</title></head></html>"
+        with pytest.raises(RuntimeError) as excinfo:
+            images_from_payload(html)
+        message = str(excinfo.value)
+        assert "网页" in message
+        assert "/v1" in message, "报错应指出最常见的成因（缺少 /v1）"
+
+    def test_plain_string_payload_raises_runtime_error(self):
+        from huishi.image_api import images_from_payload
+
+        with pytest.raises(RuntimeError) as excinfo:
+            images_from_payload("not json at all")
+        assert "不支持的数据格式" in str(excinfo.value)
+
+    def test_none_payload_raises_runtime_error_not_attribute_error(self):
+        from huishi.image_api import images_from_payload
+
+        with pytest.raises(RuntimeError):
+            images_from_payload(None)
+
+    def test_valid_dict_payload_without_images_raises_the_existing_message(self):
+        """防御不能改变已有语义：空 data 仍抛"没有解析到图片结果"。"""
+        from huishi.image_api import images_from_payload
+
+        with pytest.raises(RuntimeError) as excinfo:
+            images_from_payload({"data": []})
+        assert "没有解析到图片结果" in str(excinfo.value)
+
+    def test_webpage_response_is_recorded_as_upstream_failure(self, app, monkeypatch):
+        """网页响应必须写成 upstream 失败埋点（旧代码连埋点都写不了）。
+
+        注意 failover 对上游错误是**刻意不切换渠道**的：上游可能已受理，
+        自动重试会造成重复生成与重复扣费。所以这里断言的是"被记录"，
+        而不是"切换到下一个渠道"。
+        """
+
+        def fake_generate_image(**kwargs):
+            raise RuntimeError("生图接口返回了网页而不是图片数据")
+
+        monkeypatch.setattr(providers, "generate_image", fake_generate_image)
+
+        with app.app_context():
+            save_channel("broken", api_format="openai")
+            get_db().commit()
+
+            with pytest.raises(RuntimeError) as excinfo:
+                providers.generate_image_with_failover(
+                    prompt="p",
+                    mode="text",
+                    ratio="1:1",
+                    resolution="1K",
+                    count=1,
+                    quality="auto",
+                    output_format="png",
+                    reference_images=[],
+                    model="gpt-image-2",
+                )
+            assert "已停止自动重试" in str(excinfo.value)
+
+            rows = get_db().execute(
+                "SELECT outcome, error_class, error_message FROM provider_call_logs ORDER BY id"
+            ).fetchall()
+            assert len(rows) == 1, "失败必须留下埋点（旧代码这里会是 0 行）"
+            assert rows[0]["outcome"] == pm.OUTCOME_FAILED
+            assert rows[0]["error_class"] == pm.ERROR_CLASS_UPSTREAM
+            assert "网页" in rows[0]["error_message"]
