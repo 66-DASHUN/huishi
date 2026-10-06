@@ -499,3 +499,96 @@ def test_grok_reference_edit_uses_json_endpoint(monkeypatch):
     }
     assert captured["json"]["aspect_ratio"] == "3:2"
     assert captured["json"]["resolution"] == "1k"
+
+
+class TestGeminiLegacyGenerateContentFallback:
+    """部分网关（New API 系）不提供 /v1beta/interactions，只暴露经典端点。
+
+    线上 2026-10-06 实测：第三方网关的 /v1beta/interactions 返回 404
+    （{"error":{"message":"Invalid URL (POST /v1beta/interactions)"}}），
+    而 /v1beta/models/<model>:generateContent 返回 200 且含 inlineData 图片。
+    此前该渠道因此 100% 失败。
+    """
+
+    def test_legacy_url_uses_models_path(self):
+        assert image_api.gemini_generate_content_url(
+            "https://ai.example.com", "gemini-3.1-flash-image"
+        ) == "https://ai.example.com/v1beta/models/gemini-3.1-flash-image:generateContent"
+
+    def test_legacy_url_does_not_double_the_v1beta_segment(self):
+        assert image_api.gemini_generate_content_url(
+            "https://ai.example.com/v1beta/", "m"
+        ) == "https://ai.example.com/v1beta/models/m:generateContent"
+
+    def test_legacy_payload_wraps_prompt_in_contents_parts(self):
+        payload = image_api.gemini_generate_content_payload(
+            prompt="a red cube", ratio="1:1", resolution="1K",
+            output_format="png", reference_images=[],
+        )
+        assert payload["contents"][0]["role"] == "user"
+        assert payload["contents"][0]["parts"] == [{"text": "a red cube"}]
+        assert payload["generationConfig"]["imageConfig"]["aspectRatio"] == "1:1"
+
+    def test_legacy_payload_inlines_reference_images(self):
+        from io import BytesIO
+        from werkzeug.datastructures import FileStorage
+
+        ref = FileStorage(stream=BytesIO(b"pngbytes"), filename="r.png", content_type="image/png")
+        payload = image_api.gemini_generate_content_payload(
+            prompt="p", ratio="16:9", resolution="1K",
+            output_format="png", reference_images=[ref],
+        )
+        parts = payload["contents"][0]["parts"]
+        assert parts[0] == {"text": "p"}
+        assert parts[1]["inlineData"]["mimeType"] == "image/png"
+
+    def test_candidates_payload_is_normalized_to_image_data(self):
+        payload = {"candidates": [{"content": {"parts": [{"inlineData": {"data": "QUJD"}}]}}]}
+        assert image_api.gemini_candidates_as_image_data(payload) == {"data": [{"b64_json": "QUJD"}]}
+
+    def test_candidates_payload_accepts_snake_case(self):
+        payload = {"candidates": [{"content": {"parts": [{"inline_data": {"data": "QUJD"}}]}}]}
+        assert image_api.gemini_candidates_as_image_data(payload) == {"data": [{"b64_json": "QUJD"}]}
+
+    def test_candidates_payload_without_images_raises(self):
+        with pytest.raises(RuntimeError, match="没有返回图片"):
+            image_api.gemini_candidates_as_image_data({"candidates": [{"content": {"parts": []}}]})
+
+    def test_interactions_404_falls_back_to_generate_content(self, monkeypatch):
+        """404 时应回退；其它错误不应回退（避免掩盖真实上游故障）。"""
+        calls: list[str] = []
+
+        def fake_post(url, *, headers, payload, timeout, proxy_url=""):
+            calls.append(url)
+            if url.endswith("/v1beta/interactions"):
+                raise RuntimeError("生图接口返回 HTTP 404: Invalid URL (POST /v1beta/interactions)")
+            return {"candidates": [{"content": {"parts": [{"inlineData": {"data": "QUJD"}}]}}]}
+
+        monkeypatch.setattr(image_api, "post_provider_json", fake_post)
+        monkeypatch.setattr(image_api, "save_binary_image", lambda data, name, **kw: name)
+
+        paths = image_api.generate_gemini_images(
+            prompt="p", ratio="1:1", resolution="1K", count=1,
+            api_key="k", base_url="https://ai.example.com", model="gemini-3.1-flash-image",
+            output_format="png", reference_images=[], timeout=30,
+        )
+        assert len(calls) == 2
+        assert calls[0].endswith("/v1beta/interactions")
+        assert calls[1].endswith("/v1beta/models/gemini-3.1-flash-image:generateContent")
+        assert paths
+
+    def test_non_404_error_does_not_fall_back(self, monkeypatch):
+        calls: list[str] = []
+
+        def fake_post(url, *, headers, payload, timeout, proxy_url=""):
+            calls.append(url)
+            raise RuntimeError("生图接口返回 HTTP 500: upstream exploded")
+
+        monkeypatch.setattr(image_api, "post_provider_json", fake_post)
+        with pytest.raises(RuntimeError, match="500"):
+            image_api.generate_gemini_images(
+                prompt="p", ratio="1:1", resolution="1K", count=1,
+                api_key="k", base_url="https://ai.example.com", model="m",
+                output_format="png", reference_images=[], timeout=30,
+            )
+        assert calls == ["https://ai.example.com/v1beta/interactions"]

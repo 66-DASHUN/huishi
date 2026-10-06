@@ -469,6 +469,60 @@ def gemini_payload_as_image_data(payload: dict[str, Any]) -> dict[str, list[dict
     return {"data": images}
 
 
+def gemini_generate_content_url(base_url: str, model: str) -> str:
+    """Legacy Gemini REST endpoint: /v1beta/models/<model>:generateContent.
+
+    The newer ``/v1beta/interactions`` path is not offered by every gateway
+    (New API style gateways only expose the classic models/* path), so the
+    caller falls back to this one when interactions returns 404.
+    """
+    root = str(base_url or "").strip().rstrip("/")
+    if root.lower().endswith("/v1beta"):
+        root = root[: -len("/v1beta")]
+    return f"{root}/v1beta/models/{str(model or '').strip()}:generateContent"
+
+
+def gemini_generate_content_payload(*, prompt: str, ratio: str, resolution: str,
+                                    output_format: str, reference_images: list[FileStorage]) -> dict[str, Any]:
+    """Build a classic generateContent body (contents[].parts[])."""
+    parts: list[dict[str, Any]] = [{"text": prompt}]
+    for item, data_url in zip(reference_images, reference_image_data_urls(reference_images)):
+        _, encoded = data_url.split(",", 1)
+        parts.append({
+            "inlineData": {
+                "mimeType": item.mimetype or "application/octet-stream",
+                "data": encoded,
+            }
+        })
+    body: dict[str, Any] = {"contents": [{"role": "user", "parts": parts}]}
+    # 仅传比例；像素档位由上游按模型默认决定（与新版 interactions 的
+    # response_format.image_size 不同，旧式端点没有等价字段）。
+    if ratio:
+        body["generationConfig"] = {"imageConfig": {"aspectRatio": ratio}}
+    return body
+
+
+def gemini_candidates_as_image_data(payload: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
+    """Normalize a classic generateContent reply into the images_from_payload shape."""
+    images: list[dict[str, str]] = []
+    for candidate in payload.get("candidates") or []:
+        if not isinstance(candidate, dict):
+            continue
+        content = candidate.get("content") if isinstance(candidate.get("content"), dict) else {}
+        for block in content.get("parts") or []:
+            if not isinstance(block, dict):
+                continue
+            inline = block.get("inlineData") or block.get("inline_data")
+            if not isinstance(inline, dict):
+                continue
+            data = inline.get("data")
+            if isinstance(data, str) and data:
+                images.append({"b64_json": data})
+    if not images:
+        raise RuntimeError("Gemini 接口调用成功，但没有返回图片")
+    return {"data": images}
+
+
 def reference_image_data_urls(reference_images: list[FileStorage]) -> list[str]:
     result: list[str] = []
     for item in reference_images:
@@ -534,13 +588,34 @@ def generate_gemini_images(
             },
             "store": False,
         }
-        response_payload = post_provider_json(
-            provider_json_url(base_url, provider_endpoint_path(api_format, "text", model)),
-            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
-            payload=payload,
-            timeout=timeout,
-            proxy_url=proxy_url,
-        )
+        headers = {"Content-Type": "application/json", "x-goog-api-key": api_key}
+        try:
+            response_payload = post_provider_json(
+                provider_json_url(base_url, provider_endpoint_path(api_format, "text", model)),
+                headers=headers,
+                payload=payload,
+                timeout=timeout,
+                proxy_url=proxy_url,
+            )
+        except RuntimeError as exc:
+            # 部分网关（New API 系）不提供 /v1beta/interactions，只暴露经典
+            # /v1beta/models/<model>:generateContent。此时按旧式协议重试一次，
+            # 而不是让整个渠道不可用。
+            if "404" not in str(exc):
+                raise
+            legacy_payload = gemini_generate_content_payload(
+                prompt=prompt, ratio=ratio, resolution=resolution,
+                output_format=output_format, reference_images=reference_images,
+            )
+            legacy = post_provider_json(
+                gemini_generate_content_url(base_url, model),
+                headers=headers,
+                payload=legacy_payload,
+                timeout=timeout,
+                proxy_url=proxy_url,
+            )
+            image_paths.extend(images_from_payload(gemini_candidates_as_image_data(legacy), proxy_url=proxy_url))
+            continue
         image_paths.extend(images_from_payload(gemini_payload_as_image_data(response_payload), proxy_url=proxy_url))
     return image_paths[:count]
 
