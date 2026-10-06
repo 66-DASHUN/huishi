@@ -1,0 +1,20 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "node tools/run_python.mjs -m pytest -q",
+    "check:encoding": "node tools/run_python.mjs tools/check_encoding.py",
+    "check:assets": "node tools/run_python.mjs tools/check_asset_budget.py",
+    "verify:home": "npm run check:encoding && npm run build:home && npm run check:assets",
+    "build:home": "npm run build:home:js && npm run build:home:css",
+    "build:home:js": "node tools/build_home_js.mjs",
+    "build:home:css": "tailwindcss -c tailwind.home.config.js -i static/css/home-tailwind.input.css -o static/css/home-tailwind.css --minify"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.2",
+    "tailwindcss": "^3.4.17"
+  }
+}
