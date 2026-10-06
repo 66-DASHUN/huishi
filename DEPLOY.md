@@ -88,6 +88,12 @@ releases/<release-name>/
 
 ### 3.2 标准发布步骤
 
+> **从模板开始**：`deploy/release_template/` 提供了带前置校验的
+> `prepare.sh` 与 `deploy.sh`；它们把下面 §5 的三个陷阱编码成了脚本断言，
+> 而不是留在文档里。新发布请从模板复制，不要手写。
+
+
+
 ```bash
 cd /opt/huishi
 
