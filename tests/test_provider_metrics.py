@@ -561,3 +561,92 @@ class TestTaskIdIsNotForwardedUpstream:
 
         assert recorded, "成功调用应当写一条埋点"
         assert recorded[0]["task_id"] == 4242
+
+
+class TestSaveProviderClearsStaleDisabledAt:
+    """重新启用渠道必须清掉历史 disabled_at，否则显示层会永久误报。
+
+    线上 2026-10-06 有三行（grok / ai.junze.me / Prompt Provider）
+    ``enabled=1`` 却残留 disabled_at。根因是 ``save_provider`` 的 UPDATE
+    只写 ``enabled``，从不碰 ``disabled_at``。
+    """
+
+    def test_enabling_clears_disabled_at(self, app):
+        with app.app_context():
+            provider_id = save_channel("alpha", enabled=False)
+            get_db().execute(
+                "UPDATE api_providers SET disabled_at=? WHERE id=?",
+                ("2026-01-01T00:00:00+00:00", provider_id),
+            )
+            get_db().commit()
+
+            providers.save_provider(
+                provider_id=provider_id,
+                provider_type="image",
+                name="alpha",
+                base_url="https://example.com",
+                api_key="sk-alpha-secret",
+                model="gpt-image-2",
+                priority=100,
+                enabled=True,
+                resolutions=["1K", "2K", "4K"],
+            )
+            get_db().commit()
+
+            row = get_db().execute(
+                "SELECT enabled, disabled_at FROM api_providers WHERE id=?", (provider_id,)
+            ).fetchone()
+            assert row["enabled"] == 1
+            assert row["disabled_at"] == ""
+
+    def test_enabling_a_channel_that_was_never_disabled_is_harmless(self, app):
+        """对没有 disabled_at 的渠道重复保存不应出错。"""
+        with app.app_context():
+            provider_id = save_channel("beta")
+            providers.save_provider(
+                provider_id=provider_id,
+                provider_type="image",
+                name="beta",
+                base_url="https://example.com",
+                api_key="sk-beta-secret",
+                model="gpt-image-2",
+                priority=100,
+                enabled=True,
+                resolutions=["1K", "2K", "4K"],
+            )
+            get_db().commit()
+
+            row = get_db().execute(
+                "SELECT enabled, disabled_at FROM api_providers WHERE id=?", (provider_id,)
+            ).fetchone()
+            assert row["enabled"] == 1
+            assert row["disabled_at"] == ""
+
+    def test_saving_a_channel_as_disabled_preserves_existing_disabled_at(self, app):
+        """停用态保存不应抹掉已有的停用时间戳。"""
+        with app.app_context():
+            provider_id = save_channel("gamma", enabled=False)
+            stamp = "2026-01-01T00:00:00+00:00"
+            get_db().execute(
+                "UPDATE api_providers SET disabled_at=? WHERE id=?", (stamp, provider_id)
+            )
+            get_db().commit()
+
+            providers.save_provider(
+                provider_id=provider_id,
+                provider_type="image",
+                name="gamma",
+                base_url="https://example.com",
+                api_key="sk-gamma-secret",
+                model="gpt-image-2",
+                priority=100,
+                enabled=False,
+                resolutions=["1K", "2K", "4K"],
+            )
+            get_db().commit()
+
+            row = get_db().execute(
+                "SELECT enabled, disabled_at FROM api_providers WHERE id=?", (provider_id,)
+            ).fetchone()
+            assert row["enabled"] == 0
+            assert row["disabled_at"] == stamp

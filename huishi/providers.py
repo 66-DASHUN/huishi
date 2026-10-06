@@ -703,10 +703,14 @@ def save_provider(
             settings_json = ?,
             priority = ?,
             enabled = ?,
+            -- 启用即视为"当前可用"，历史停用时间戳必须一起清掉。
+            -- 不清的话，任何被手动重新启用的渠道都会永久显示为异常
+            -- （2026-10-06 线上 grok/ai.junze.me/Prompt Provider 三行即此残留）。
+            disabled_at = CASE WHEN ? THEN '' ELSE disabled_at END,
             updated_at = ?
         WHERE id = ?
         """,
-        (*values, now, int(provider_id)),
+        (*values, bool(enabled), now, int(provider_id)),
     )
     invalidate_catalog()
     if connection_changed:
