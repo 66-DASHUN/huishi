@@ -5,8 +5,11 @@
 ## 总体状态
 
 ```
-49 failed, 618 passed, 61 skipped
+49 failed, 651 passed, 61 skipped
 ```
+
+（2026-10-06 更新：新增 `tests/test_provider_metrics.py` 33 个用例，全部通过。
+失败数仍为 49，与 618 → 651 的增量完全由新文件解释。）
 
 **发布门禁的现状：测试不能直接当门禁用**，需先看本文档的失败分类。
 
@@ -67,6 +70,22 @@ requested_model = "" → 兜底返回 "*" → 定价表无 "*" 规则 → 400「
 
 `test_canvas_embed_mode_contract.py` 等依赖 `HUISHI_CANVAS_PROJECT_DIR`，
 未设置时整组 skip 而不会失败。发布前如需覆盖画布契约，须显式设置该变量。
+
+## 渠道健康度（2026-10-06 新增）
+
+新增 `huishi/provider_metrics.py` + `provider_call_logs` 表 + `/admin/channel-health` 页面。
+验证方式（可复现）：
+
+1. `py -m pytest tests/test_provider_metrics.py -q` → 33 passed
+2. 全量 `py -m pytest tests/ -q` → 失败数必须仍为 **49**（本次实测 49/651/61）
+3. 埋点不变量已单独验证：故意让 `record_provider_call` 抛异常，生成仍成功
+   （`_log_provider_call` 自身也 try/except——它插在 `except` 块里，
+   若不兜住会用无关的埋点错误掩盖真实的上游失败）
+4. 5 项运行时变异均被测试捕获（去掉脱敏、去掉阈值下限、无数据报 healthy 等）
+
+注意：`generation_queue.py:192` 传了 `task_id`，而 `routes_workspace.py:959/2026`
+两处同步端点没有（那时任务尚未创建）。两处的渠道归因照常记录，只是
+`task_id` 为 NULL，不影响按渠道聚合。
 
 ## 建议
 

@@ -1550,6 +1550,33 @@ def records():
     )
 
 
+@bp.get("/channel-health")
+@permission_required("providers.view")
+def channel_health():
+    """Per-channel success rate, latency and failure reasons.
+
+    Read-only: ``provider_call_logs`` is filled by the generation path, so this
+    page never issues an upstream request and cannot slow down a worker.
+    """
+    from huishi.provider_metrics import channel_health as collect_channel_health
+
+    window_raw = request.args.get("window", "").strip()
+    window_hours = int(window_raw) if window_raw.isdigit() else 24
+    window_hours = window_hours if window_hours in {1, 6, 24, 72, 168} else 24
+    return render_template(
+        "admin/channel_health.html",
+        health=collect_channel_health(window_hours=window_hours),
+        window_hours=window_hours,
+        window_options=[
+            (1, "最近 1 小时"),
+            (6, "最近 6 小时"),
+            (24, "最近 24 小时"),
+            (72, "最近 3 天"),
+            (168, "最近 7 天"),
+        ],
+    )
+
+
 @bp.post('/media-tasks/<int:task_id>/resume')
 @permission_required('providers.update')
 def resume_media_task(task_id):

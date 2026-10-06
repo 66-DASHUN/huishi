@@ -195,6 +195,28 @@ CREATE TABLE IF NOT EXISTS api_providers (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS provider_call_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  provider_id INTEGER,
+  provider_name TEXT NOT NULL DEFAULT '',
+  api_format TEXT NOT NULL DEFAULT '',
+  media_type TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  task_id INTEGER,
+  record_id INTEGER,
+  outcome TEXT NOT NULL,
+  error_class TEXT NOT NULL DEFAULT '',
+  error_message TEXT NOT NULL DEFAULT '',
+  latency_ms INTEGER NOT NULL DEFAULT 0,
+  attempt_index INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_provider_call_logs_provider_time
+ON provider_call_logs(provider_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_provider_call_logs_created
+ON provider_call_logs(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS invite_codes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

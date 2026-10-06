@@ -22,6 +22,7 @@
         </nav>
       </div>
       {% endif %}
+      {% if can("providers.view") %}<a href="/admin/channel-health" {% if request.endpoint == "admin.channel_health" %}aria-current="page"{% endif %}>渠道健康度</a>{% endif %}
       {% if can("audit.view") %}<a href="/admin/audit" {% if request.endpoint == "admin.audit_logs" %}aria-current="page"{% endif %}>审计日志</a>{% endif %}
     </nav>
     <a class="admin-console-back" href="/workspace">返回工作台</a>

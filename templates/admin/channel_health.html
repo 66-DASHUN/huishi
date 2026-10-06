@@ -1,0 +1,135 @@
+{% extends "admin/layout.html" %}
+{% block title %}渠道健康度 - 绘世{% endblock %}
+{% block admin_content %}
+<header class="admin-page-header">
+  <div>
+    <span>OPERATIONS</span>
+    <h1>渠道健康度</h1>
+  </div>
+  <time>{{ health["generated_at"][:19].replace("T", " ") }} UTC</time>
+</header>
+
+<p class="admin-section-note">
+  数据来自每次上游调用的逐条记录，窗口 {{ health["window_hours"] }} 小时。本页只读，不会向上游发起请求。
+</p>
+
+<section class="admin-metric-strip" aria-label="渠道指标">
+  <article><span>调用总数</span><strong>{{ health["totals"]["calls"] }}</strong><small>含个人 Key</small></article>
+  <article><span>成功率</span><strong>{{ health["totals"]["success_rate"] }}%</strong><small>窗口内</small></article>
+  <article><span>失败数</span><strong>{{ health["totals"]["failed"] }}</strong><small>全部渠道</small></article>
+  <article><span>异常渠道</span><strong>{{ health["totals"]["critical"] }}</strong><small>共 {{ health["totals"]["channels"] }} 个渠道</small></article>
+</section>
+
+<form class="admin-list-toolbar" method="get">
+  <label>
+    <span class="sr-only">统计窗口</span>
+    <select name="window">
+      {% for value, label in window_options %}
+      <option value="{{ value }}" {% if window_hours == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">切换窗口</button>
+  <a href="/admin/channel-health">重置</a>
+</form>
+
+{% if health["totals"]["calls"] == 0 %}
+<section class="admin-section">
+  <div class="admin-empty">
+    该窗口内没有渠道调用记录。逐次调用记录从本次上线后开始采集，上线前的历史调用无法回溯归因。
+  </div>
+</section>
+{% endif %}
+
+<section class="admin-section">
+  <div class="admin-section-heading">
+    <h2>渠道状态</h2>
+    <span>按优先级排序</span>
+  </div>
+  <div class="admin-health-table" role="table" aria-label="渠道健康状态">
+    {% for channel in health["channels"] %}
+    <div role="row" data-health-status="{{ channel['status'] }}">
+      <span role="cell"><i></i>
+        {{ channel["name"] or ("#" ~ channel["id"]) }}
+        {% if not channel["enabled"] %}（已停用）{% endif %}
+      </span>
+      <strong role="cell" data-health-label>{{ channel["status_label"] }}</strong>
+      <span role="cell">
+        调用 {{ channel["calls"] }} · 失败 {{ channel["failed"] }}（{{ channel["failure_rate"] }}%）
+        {% if channel["avg_latency_ms"] %}· 平均 {{ channel["avg_latency_ms"] }} ms{% endif %}
+        {% if channel["consecutive_failures"] %}· 连续失败 {{ channel["consecutive_failures"] }} 次{% endif %}
+        {% if channel["note"] %}<br><small>{{ channel["note"] }}</small>{% endif %}
+      </span>
+      <span role="cell">
+        {% if channel["last_error_label"] %}
+          最近错误：{{ channel["last_error_label"] }}
+        {% elif channel["last_checked_at"] %}
+          最近测试：{{ channel["last_checked_at"][:19].replace("T", " ") }}
+        {% else %}
+          —
+        {% endif %}
+      </span>
+    </div>
+    {% else %}
+    <div role="row" data-health-status="unknown">
+      <span role="cell"><i></i>尚无渠道</span>
+      <strong role="cell" data-health-label>无数据</strong>
+      <span role="cell">还没有配置任何渠道</span>
+      <span role="cell">—</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% if health["personal_provider"] %}
+{% set personal = health["personal_provider"] %}
+<section class="admin-section">
+  <div class="admin-section-heading">
+    <h2>个人 API Key</h2>
+    <span>不占用平台渠道</span>
+  </div>
+  <div class="admin-health-table" role="table" aria-label="个人 Key 调用">
+    <div role="row" data-health-status="{% if personal['failed'] %}warning{% else %}healthy{% endif %}">
+      <span role="cell"><i></i>{{ personal["name"] }}</span>
+      <strong role="cell" data-health-label>{% if personal["failed"] %}有失败{% else %}正常{% endif %}</strong>
+      <span role="cell">
+        调用 {{ personal["calls"] }} · 失败 {{ personal["failed"] }}（{{ personal["failure_rate"] }}%）
+        {% if personal["avg_latency_ms"] %}· 平均 {{ personal["avg_latency_ms"] }} ms{% endif %}
+      </span>
+      <span role="cell">用户自带密钥</span>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="admin-section">
+  <div class="admin-section-heading">
+    <h2>失败原因</h2>
+    <span>窗口内出现最多的原因</span>
+  </div>
+  {% set failing = health["channels"] | selectattr("top_errors") | list %}
+  {% if failing %}
+  <div class="config-table-scroll">
+    <table class="config-table">
+      <thead>
+        <tr><th>渠道</th><th>原因</th><th>次数</th><th>原始信息</th></tr>
+      </thead>
+      <tbody>
+        {% for channel in failing %}
+          {% for error in channel["top_errors"] %}
+          <tr>
+            <td data-label="渠道">{{ channel["name"] or ("#" ~ channel["id"]) }}</td>
+            <td data-label="原因">{{ error["label"] }}</td>
+            <td data-label="次数">{{ error["occurrences"] }}</td>
+            <td data-label="原始信息"><small>{{ error["message"] }}</small></td>
+          </tr>
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="admin-empty">窗口内没有失败的渠道调用</div>
+  {% endif %}
+</section>
+{% endblock %}

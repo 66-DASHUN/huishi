@@ -71,6 +71,7 @@ IDENTITY_TABLES = {
     "invite_redemptions",
     "packages",
     "point_ledger",
+    "provider_call_logs",
     "pricing_rules",
     "records",
     "users",

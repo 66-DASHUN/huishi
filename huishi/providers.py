@@ -1510,6 +1510,7 @@ def generate_image_with_failover(**kwargs) -> dict[str, object]:
         provider_key = provider.get("id") if provider.get("id") is not None else id(provider)
         tried_provider_ids.add(provider_key)
         for attempt in range(1):
+            started_at = time.monotonic()
             try:
                 selected_model = requested_model if requested_model and requested_model != "*" else _default_image_model_for_provider(provider, resolution)
                 from huishi.model_lifecycle import upstream_model
@@ -1522,16 +1523,52 @@ def generate_image_with_failover(**kwargs) -> dict[str, object]:
                     proxy_url=str(provider.get("proxy_url") or ""),
                 )
                 result['model_source']=selected_model
+                _log_provider_call(provider, selected_model, kwargs, 'succeeded',
+                    latency_ms=(time.monotonic()-started_at)*1000)
                 return result
             except ConfigurationError as exc:
                 safe_error = redact_sensitive_text(str(exc), provider.get("api_key"), provider.get("base_url"))
                 last_error = safe_error
+                _log_provider_call(provider, requested_model, kwargs, 'failed',
+                    error_class='configuration', error_message=safe_error,
+                    latency_ms=(time.monotonic()-started_at)*1000)
                 break
             except (RuntimeError, OpenAIError) as exc:
                 safe_error = redact_sensitive_text(str(exc), provider.get("api_key"), provider.get("base_url"))
                 logger.warning('image response uncertain provider_id=%s error=%s',provider.get('id'),safe_error)
+                _log_provider_call(provider, requested_model, kwargs, 'failed',
+                    error_class='upstream', error_message=safe_error,
+                    latency_ms=(time.monotonic()-started_at)*1000)
                 raise RuntimeError('本次生图未取得完整结果，已停止自动重试；请核对渠道任务与扣费后再生成') from exc
     raise RuntimeError(last_error or "所有生图配置均调用失败")
+
+
+def _log_provider_call(provider: dict[str, Any], model: str, call_kwargs: dict[str, Any],
+                       outcome: str, *, error_class: str = '', error_message: str = '',
+                       latency_ms: float = 0.0) -> None:
+    """Record one image call attempt for the channel health page.
+
+    ``record_provider_call`` already swallows its own errors, but this is called
+    from inside an ``except`` block where a raise would replace the real upstream
+    failure with a telemetry error, so the guarantee is enforced here too.
+    """
+    try:
+        from huishi.provider_metrics import record_provider_call
+        record_provider_call(
+            provider_id=provider.get('id'),
+            provider_name=str(provider.get('name') or ''),
+            api_format=str(provider.get('api_format') or ''),
+            media_type='image',
+            model=model,
+            task_id=call_kwargs.get('task_id'),
+            outcome=outcome,
+            error_class=error_class,
+            error_message=error_message,
+            latency_ms=latency_ms,
+            attempt_index=0,
+        )
+    except Exception:
+        logger.debug('provider call telemetry skipped', exc_info=True)
 
 
 def legacy_prompt_provider_from_settings() -> dict[str, Any] | None:
