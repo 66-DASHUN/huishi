@@ -1,0 +1,13 @@
+# 统一以 LF 存储。本地 Windows 检出若转成 CRLF，会与线上源码产生
+# 逐字节差异，导致每次基线比对都出现大量假差异（2026-10-06 修正）。
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.sqlite3 binary
+*.dump binary
