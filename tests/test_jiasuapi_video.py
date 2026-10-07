@@ -4,7 +4,7 @@ import pytest
 
 from huishi import video_api
 from huishi.media_capabilities import validate_video_request, video_capabilities
-from huishi.video_adapters import jiasuapi
+from huishi.video_adapters import common, jiasuapi
 from huishi import media_references
 
 
@@ -21,11 +21,16 @@ class Response:
 def test_jiasuapi_video_create_maps_reference_materials(monkeypatch):
     captured = {}
 
-    def fake_request(method, url, **kwargs):
-        captured.update(method=method, url=url, payload=kwargs.get("json"))
+    def fake_post(url, **kwargs):
+        captured.update(method="POST", url=url, payload=kwargs.get("json"))
         return Response(200, {"id": "task_video_1", "status": "queued"})
 
-    monkeypatch.setattr(jiasuapi.requests, "request", fake_request)
+    # jiasuapi 现在复用 common 的统一 HTTP 层（此前它自建了一套
+    # _url/_headers/_request，与其它适配器重复且漏了 allow_redirects=False）。
+    # 打桩必须打在 requests.post/get 上：common 用的是这两个快捷函数，
+    # 它们内部走 requests.api.request，打 requests.request 拦不住
+    # （会真的发出网络请求）。仓库里 test_video_api.py 也是这个约定。
+    monkeypatch.setattr(common.requests, "post", fake_post)
     task = jiasuapi.create(
         {"base_url": "https://ai.jiasuapi.com", "api_key": "secret", "settings": {}},
         {
@@ -53,7 +58,7 @@ def test_jiasuapi_video_poll_normalizes_result_urls(monkeypatch):
         Response(200, {"id": "task_video_1", "status": "in_progress", "result_urls": []}),
         Response(200, {"id": "task_video_1", "status": "completed", "result_urls": ["https://m.jiasuapi.com/media/video.mp4"]}),
     ])
-    monkeypatch.setattr(jiasuapi.requests, "request", lambda *args, **kwargs: next(responses))
+    monkeypatch.setattr(common.requests, "get", lambda *args, **kwargs: next(responses))
 
     pending = jiasuapi.poll({"base_url": "https://ai.jiasuapi.com", "api_key": "secret"}, "task_video_1")
     complete = jiasuapi.poll({"base_url": "https://ai.jiasuapi.com", "api_key": "secret"}, "task_video_1")
@@ -154,3 +159,70 @@ def test_reference_metadata_preserves_h3_video_duration_and_mime(monkeypatch):
     item = result["content"][1]
     assert item["video_url"]["duration_seconds"] == 9.5
     assert item["video_url"]["mime"] == "video/mp4"
+
+
+def test_jiasuapi_reuses_the_shared_http_layer(monkeypatch):
+    """jiasuapi 必须走 common 的统一 HTTP 层，而不是自建一套。
+
+    它此前自带 _url/_headers/_request 三个函数，与其它适配器重复，并且
+    漏掉了 ``allow_redirects=False``——重定向会让请求落到别的地址，而错误
+    分类与脱敏都按原地址判断，属于会静默走偏的差异。
+    """
+    captured = {}
+
+    def fake_post(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return Response(200, {"id": "t1", "status": "queued"})
+
+    monkeypatch.setattr(common.requests, "post", fake_post)
+    jiasuapi.create(
+        {"base_url": "https://ai.jiasuapi.com", "api_key": "secret", "settings": {}},
+        {"model": "minimax-h3", "prompt": "x", "duration_seconds": 8,
+         "ratio": "16:9", "resolution": "2k", "idempotency_key": "idem-x"},
+    )
+
+    assert captured["allow_redirects"] is False, "统一后不应再跟随重定向"
+    assert captured["timeout"] == (15, 60)
+    assert captured["headers"]["Idempotency-Key"] == "idem-x"
+    # base_url 已带 /v1 时不应重复拼接
+    assert captured["url"] == "https://ai.jiasuapi.com/v1/video/generations"
+
+
+def test_jiasuapi_http_error_uses_the_shared_format(monkeypatch):
+    """错误文案与其它适配器统一为 "HTTP <code>: <message>"。
+
+    统一前 jiasuapi 只抛 message 本身，同一类上游故障在不同渠道下产生
+    不同形状的文案，管理员在渠道健康度页面里看到的摘要也就随渠道而变。
+    """
+    from huishi.video_api import VideoApiError
+
+    monkeypatch.setattr(
+        common.requests, "post",
+        lambda url, **kwargs: Response(400, {"error": {"message": "bad model"}}),
+    )
+
+    with pytest.raises(VideoApiError) as excinfo:
+        jiasuapi.create(
+            {"base_url": "https://ai.jiasuapi.com", "api_key": "secret", "settings": {}},
+            {"model": "minimax-h3", "prompt": "x", "duration_seconds": 8,
+             "ratio": "16:9", "resolution": "2k", "idempotency_key": "idem-y"},
+        )
+    assert "HTTP 400" in str(excinfo.value)
+    assert "bad model" in str(excinfo.value)
+
+
+def test_jiasuapi_upstream_5xx_is_retryable(monkeypatch):
+    """上游 5xx 必须归为可重试——统一后由 common 统一判定，不再各写一份。"""
+    from huishi.video_adapters.common import RetryableVideoError
+
+    monkeypatch.setattr(
+        common.requests, "post",
+        lambda url, **kwargs: Response(502, {"error": {"message": "bad gateway"}}),
+    )
+
+    with pytest.raises(RetryableVideoError):
+        jiasuapi.create(
+            {"base_url": "https://ai.jiasuapi.com", "api_key": "secret", "settings": {}},
+            {"model": "minimax-h3", "prompt": "x", "duration_seconds": 8,
+             "ratio": "16:9", "resolution": "2k", "idempotency_key": "idem-z"},
+        )
