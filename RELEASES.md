@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:runtime-groups-20261007` |
-| `worker` | `huishi-backend:runtime-groups-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:entry-priority-20261007` |
+| `worker` | `huishi-backend:entry-priority-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:token-fragment-20261005` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-runtime-groups-20261007`
+**当前回滚目标**：`huishi-backend:rollback-entry-priority-20261007`
 
 ## 版本类型约定
 
@@ -39,7 +39,8 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `runtime-groups-20261007` | 2026-10-07 | 8 | `huishi-backend:runtime-groups-20261007` | 正式 | **在跑** | 运行配置按分组折叠（需求 ③）：组标题行做成开关，默认收起；深链自动展开、窄屏不失效、脚本失败时内容仍可见 |
+| `entry-priority-20261007` | 2026-10-07 | 8 | `huishi-backend:entry-priority-20261007` | 正式 | **在跑** | 模型条目的优先级真正生效：`priority` 此前不在字段白名单里，保存后**任何一次读取都会丢弃**，导致「模型可单独设置优先级」完全空转。补齐白名单 + 候选按（条目优先、缺失回落渠道）排序。现有条目值均为 100 与渠道级相同，故行为不变、零迁移 |
+| `runtime-groups-20261007` | 2026-10-07 | 8 | `huishi-backend:runtime-groups-20261007` | 正式 | 已被取代 | 运行配置按分组折叠（需求 ③）：组标题行做成开关，默认收起；深链自动展开、窄屏不失效、脚本失败时内容仍可见 |
 | `log-handler-20261007` | 2026-10-07 | 8 | `huishi-backend:log-handler-20261007` | 正式 | 已被取代 | 日志 handler 不再随 create_app 堆积（消除日志重复与文件流泄漏）；兜底失败留下可诊断的异常类型 |
 | `unify-wording-20261007` | 2026-10-07 | 8 | `huishi-backend:unify-wording-20261007` | 正式 | 已被取代 | 统一三个视频适配器「不支持此模型」的措辞并带上模型名（需求 ②） |
 | `format-marker-20261007` | 2026-10-07 | 8 | `huishi-backend:format-marker-20261007` | 正式 | 已被取代 | 参考目录降级不再依赖错误文案（需求 ②）：改用异常标记判断，消除「改一句提示语就静默断开降级」的隐患 |
