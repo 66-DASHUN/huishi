@@ -24,6 +24,18 @@ def response_format_error(message):
     return error
 
 
+def unsupported_model_error(channel, model=""):
+    """该渠道不认识这个模型。
+
+    三个适配器原本各写一句（"DMC H3 渠道不支持此模型" / "JiasuAPI 不支持该
+    视频模型" / "Seedance Media 渠道不支持此模型"），说的是同一件事。统一到
+    一处，并要求带上模型名——管理员看到"某渠道不支持某模型"时，最需要知道的
+    就是**哪个**模型，而原文案只说"此模型"，得回去翻请求才能确定。
+    """
+    name = str(model or "").strip() or "（未指定）"
+    return VideoApiError(f"{channel} 渠道不支持模型：{name}")
+
+
 def is_response_format_error(error):
     return bool(getattr(error, "response_format_error", False))
 

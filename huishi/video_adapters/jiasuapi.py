@@ -6,7 +6,7 @@ from typing import Any
 from huishi.media_capabilities import validate_video_request, video_capabilities
 from huishi.secrets import redact_sensitive_text
 from huishi.video_api import VideoApiError, VideoTask, VideoTaskState, _normalize_status
-from .common import RetryableVideoError, request_json, require_idempotency
+from .common import RetryableVideoError, request_json, require_idempotency, unsupported_model_error
 
 
 def _reference_payload(content: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -43,7 +43,7 @@ def create(provider: dict[str, Any], request: dict[str, Any]) -> VideoTask:
     model = str(request.get("model") or provider.get("model") or "").strip()
     caps = video_capabilities("jiasuapi", model, request.get("capabilities"))
     if not caps:
-        raise VideoApiError("JiasuAPI 不支持该视频模型")
+        raise unsupported_model_error('JiasuAPI', model)
     try:
         normalized = validate_video_request(model, caps, request)
     except ValueError as exc:

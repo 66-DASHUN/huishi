@@ -1,6 +1,6 @@
 from huishi.media_capabilities import video_capabilities, validate_video_request
 from huishi.video_api import VideoTask, VideoTaskState, VideoApiError, _normalize_status
-from .common import request_json, task_segment, error_text, require_idempotency, RetryableVideoError
+from .common import RetryableVideoError, error_text, request_json, require_idempotency, task_segment, unsupported_model_error
 
 
 def create(provider, request):
@@ -8,7 +8,7 @@ def create(provider, request):
     model = str(request.get('model') or provider.get('model') or '')
     caps = video_capabilities('dmc_h3', model)
     if not caps:
-        raise VideoApiError('DMC H3 渠道不支持此模型')
+        raise unsupported_model_error('DMC H3', model)
     try:
         normalized = validate_video_request(model, caps, request)
     except ValueError as exc:

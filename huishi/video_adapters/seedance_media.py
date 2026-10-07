@@ -16,6 +16,7 @@ from .common import (
     request_json,
     require_idempotency,
     task_segment,
+    unsupported_model_error,
 )
 
 
@@ -208,7 +209,7 @@ def create(provider, request):
     model = str(request.get('model') or provider.get('model') or '')
     caps = video_capabilities('seedance_media', model)
     if not caps:
-        raise VideoApiError('Seedance Media 渠道不支持此模型')
+        raise unsupported_model_error('Seedance Media', model)
     try:
         normalized = validate_video_request(model, caps, request)
     except ValueError as exc:

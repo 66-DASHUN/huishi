@@ -152,3 +152,51 @@ def test_request_json_sends_no_redirects_and_idempotency_key(monkeypatch):
     assert captured["allow_redirects"] is False
     assert captured["headers"]["Idempotency-Key"] == "idem-1"
     assert captured["timeout"] == (15, 60)
+
+
+def test_unsupported_model_error_is_shared_and_names_the_model():
+    """三个适配器说"不支持此模型"时必须用同一套措辞，并带上模型名。
+
+    原先各写一句（"DMC H3 渠道不支持此模型" / "JiasuAPI 不支持该视频模型" /
+    "Seedance Media 渠道不支持此模型"），说的是同一件事却三种写法；而且都只说
+    "此模型"，管理员还得回去翻请求才知道是哪个模型。
+    """
+    error = common.unsupported_model_error("DMC H3", "unknown-model")
+    assert isinstance(error, VideoApiError)
+    assert "DMC H3" in str(error)
+    assert "unknown-model" in str(error)
+
+    # 渠道名照传，措辞一致
+    for channel in ("JiasuAPI", "Seedance Media", "DMC H3"):
+        text = str(common.unsupported_model_error(channel, "m"))
+        assert channel in text
+        assert text.endswith("：m")
+
+
+def test_unsupported_model_error_handles_a_missing_model_name():
+    """模型名为空时不能拼出"不支持模型：""这样的残缺文案。"""
+    text = str(common.unsupported_model_error("JiasuAPI", ""))
+    assert "JiasuAPI" in text
+    assert text.endswith("（未指定）")
+    assert "：" in text
+
+
+def test_each_adapter_reports_an_unknown_model_consistently():
+    """真正走一遍三个适配器，确认它们都抛出统一措辞。
+
+    这比只测构造器更有价值：真正要防的是某个适配器**漏改**，继续用旧文案。
+    """
+    for adapter, channel, model in (
+        (seedance_media, "Seedance Media", "not-a-real-model"),
+        (__import__("huishi.video_adapters.dmc_h3", fromlist=["dmc_h3"]), "DMC H3", "not-a-real-model"),
+        (__import__("huishi.video_adapters.jiasuapi", fromlist=["jiasuapi"]), "JiasuAPI", "not-a-real-model"),
+    ):
+        with pytest.raises(VideoApiError) as excinfo:
+            adapter.create(
+                {"base_url": "https://example.com", "api_key": "k", "settings": {}},
+                {"model": model, "prompt": "x", "duration_seconds": 5,
+                 "ratio": "16:9", "resolution": "720p", "idempotency_key": "idem-1"},
+            )
+        text = str(excinfo.value)
+        assert channel in text, (channel, text)
+        assert model in text, (channel, text)
