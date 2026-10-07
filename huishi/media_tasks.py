@@ -99,6 +99,54 @@ def recover_video_tasks(app):
         enqueue_generation_task(app, int(row['id']))
 
 
+# 待人工核对的视频任务：上游受理状态未知，因此**自动恢复被刻意暂停**
+# （见 recover_video_tasks 里对 needs_reconciliation 的跳过），只能由管理员
+# 确认原渠道后手动恢复。两处消费者必须共用这一段查询：
+#   * 业务流水页的待核对表格
+#   * 运行总览的健康探针（否则首页数字与列表会对不上）
+_NEEDS_RECONCILIATION_SELECT = (
+    "SELECT id,user_id,model,provider_id,provider_task_id,metadata_json,created_at "
+    "FROM generation_tasks "
+    "WHERE media_type='video' AND status IN ('queued','running') "
+    "ORDER BY id DESC"
+)
+
+
+def _row_metadata(row) -> dict:
+    """安全解析 metadata_json。
+
+    容错是必要的：这一列由多个写入路径维护，一条写坏的行不应让整个
+    业务流水页或运行总览探针一起挂掉。
+    """
+    try:
+        metadata = json.loads(row['metadata_json'] or '{}')
+    except (TypeError, ValueError):
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def needs_reconciliation_tasks():
+    """列出需要管理员核对的视频任务（最近在前）。"""
+    result = []
+    for row in get_db().execute(_NEEDS_RECONCILIATION_SELECT).fetchall():
+        metadata = _row_metadata(row)
+        if metadata.get('phase') != 'needs_reconciliation':
+            continue
+        item = dict(row)
+        item['metadata'] = metadata
+        result.append(item)
+    return result
+
+
+def count_needs_reconciliation() -> int:
+    """待核对任务数，供运行总览的健康探针使用。"""
+    return sum(
+        1
+        for row in get_db().execute(_NEEDS_RECONCILIATION_SELECT).fetchall()
+        if _row_metadata(row).get('phase') == 'needs_reconciliation'
+    )
+
+
 def resume_video_task(app, task_id):
     """Admin retry preserves task identity and never guesses an upstream ID."""
     from huishi.records import get_generation_task

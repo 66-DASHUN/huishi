@@ -110,6 +110,29 @@ def probe_failed_tasks() -> ProbeResult:
     return _result(status, f"24 小时内 {count} 条", count=count)
 
 
+def probe_paused_media_tasks() -> ProbeResult:
+    """待人工核对的视频任务。
+
+    这些任务的上游受理状态未知（可能已扣费也可能没有），因此代码**刻意**
+    不自动恢复也不会改投其它渠道——只能由管理员确认原渠道后手动恢复。
+    问题在于此前没有任何可发现性：管理员除非恰好打开业务流水页并往下翻，
+    否则不知道有任务卡在那里等核对。
+
+    这里把它做成运行总览的一行，并指向业务流水的待核对表格。
+    """
+    from huishi.media_tasks import count_needs_reconciliation
+
+    count = count_needs_reconciliation()
+    if not count:
+        return _result("ok", "无待核对任务", count=0)
+    return _result(
+        "warning",
+        f"{count} 条待核对，需人工确认上游受理状态",
+        count=count,
+        href="/admin/records#media-reconciliation",
+    )
+
+
 def probe_storage_cleanup() -> ProbeResult:
     return _result("unknown", "由 huishi-storage-sweep.timer 定时执行")
 
@@ -123,5 +146,6 @@ def collect_operations_health() -> dict[str, ProbeResult]:
         "disk": _safe_probe(probe_disk),
         "backup": _safe_probe(probe_backup),
         "failed_tasks": _safe_probe(probe_failed_tasks),
+        "paused_media_tasks": _safe_probe(probe_paused_media_tasks),
         "storage_cleanup": _safe_probe(probe_storage_cleanup),
     }

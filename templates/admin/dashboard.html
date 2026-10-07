@@ -18,13 +18,13 @@
 <section class="admin-section">
   <div class="admin-section-heading"><h2>运行状态</h2><span>实时探测</span></div>
   <div class="admin-health-table" role="table" aria-label="运行状态">
-    {% set labels = {"database":"数据库", "redis":"Redis / 队列", "canvas":"画布", "agent":"Agent", "disk":"磁盘", "backup":"备份", "failed_tasks":"失败任务", "storage_cleanup":"存储清理"} %}
+    {% set labels = {"database":"数据库", "redis":"Redis / 队列", "canvas":"画布", "agent":"Agent", "disk":"磁盘", "backup":"备份", "failed_tasks":"失败任务", "paused_media_tasks":"待核对任务", "storage_cleanup":"存储清理"} %}
     {% set status_labels = {"healthy":"正常", "ok":"正常", "warning":"警告", "degraded":"异常", "error":"异常", "failed":"失败", "unknown":"未知"} %}
     {% for key, item in operations_health.items() %}
     <div role="row" data-health-status="{{ item['status'] }}">
       <span role="cell"><i></i>{{ labels[key] }}</span>
       <strong role="cell" data-health-label>{{ status_labels.get(item["status"], item["status"]) }}</strong>
-      <span role="cell">{{ item["message"] }}</span>
+      <span role="cell">{% if item.get("href") %}<a href="{{ item['href'] }}">{{ item["message"] }}</a>{% else %}{{ item["message"] }}{% endif %}</span>
     </div>
     {% endfor %}
   </div>

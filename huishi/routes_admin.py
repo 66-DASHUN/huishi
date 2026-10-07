@@ -1529,11 +1529,13 @@ def records():
             "per_page": page_query.per_page,
         }
     )
+    # 共用 media_tasks 的查询：首页健康探针也要数同一批任务，
+    # 两处各写一份 SQL 迟早会漂移（数字与列表对不上）。
+    from huishi.media_tasks import needs_reconciliation_tasks
+
     return render_template(
         "admin/records.html",
-        media_reconciliation_tasks=[{**dict(row), 'metadata':json.loads(row['metadata_json'] or '{}')} for row in db.execute(
-            "SELECT id,user_id,model,provider_id,provider_task_id,metadata_json FROM generation_tasks WHERE media_type='video' AND status IN ('queued','running') ORDER BY id DESC"
-        ).fetchall() if json.loads(row['metadata_json'] or '{}').get('phase')=='needs_reconciliation'],
+        media_reconciliation_tasks=needs_reconciliation_tasks(),
         events=activity_page.rows,
         search=search,
         user_filter=user_filter,
