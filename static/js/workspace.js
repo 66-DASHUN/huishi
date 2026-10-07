@@ -488,6 +488,10 @@ function syncVideoToolbar() {
   });
   if (visible) syncVideoCapabilityControls();
   else closeParameterPanels();
+  // 切换创作类型后，@ 面板依附的锚点与文案都会变（视频用工具栏按钮、
+  // 图片用提示词输入框；措辞也从"主体"变成"参考图"），需要重新同步，
+  // 否则会残留上一模式的面板或显示旧措辞。
+  syncSubjectMentionMenu();
 }
 
 function syncVideoOptions() {
@@ -1632,7 +1636,12 @@ function positionParameterPanel(button, panel) {
   panel.style.width = `${panelWidth}px`;
 }
 
-function videoSubjectEntries() {
+// @ 引用候选：图片与视频模式**共用**同一份实现。
+// 候选来自 visibleReferenceMaterials()，它本身已按当前媒体类型过滤
+// （非视频模式返回图片素材），所以这里只需再筛出图片类型。
+// 此前该函数叫 videoSubjectEntries 且只被视频链路调用，是"@ 仅视频可用"
+// 这一限制的来源之一。
+function referenceMentionEntries() {
   return visibleReferenceMaterials()
     .filter((item) => materialFileKind(item) === "image")
     .map((item) => ({
@@ -1643,6 +1652,11 @@ function videoSubjectEntries() {
       originalName: materialDisplayName(item),
       fileType: item.file?.type || "",
     }));
+}
+
+// 旧名保留为别名：视频侧多处引用，改名会影响可读性但不该有行为差异。
+function videoSubjectEntries() {
+  return referenceMentionEntries();
 }
 
 function selectedVideoSubjectMaterial() {
@@ -1669,7 +1683,7 @@ function renderVideoSubjects(filterMention = true) {
   const empty = document.querySelector("[data-subject-empty]");
   const list = document.querySelector("[data-subject-list]");
   if (!empty || !list) return;
-  const allSubjects = videoSubjectEntries();
+  const allSubjects = referenceMentionEntries();
   const query = filterMention ? activeSubjectMention()?.query.toLocaleLowerCase() || '' : '';
   const subjects = allSubjects.filter(subject => !query || subject.fileName.toLocaleLowerCase().includes(query));
   if (selectedVideoSubjectId && !allSubjects.some((subject) => subject.id === selectedVideoSubjectId)) {
@@ -1677,8 +1691,21 @@ function renderVideoSubjects(filterMention = true) {
   }
   syncSelectedVideoSubjectInput();
   empty.hidden = subjects.length > 0;
+  const isVideoMode = selectedMediaType === 'video';
+  const noun = isVideoMode ? '主体' : '参考图';
   const emptyMessage = document.querySelector('[data-subject-empty] p');
-  if (emptyMessage) emptyMessage.textContent = allSubjects.length ? '没有匹配的主体，请修改 @ 后的名称' : '请先上传主体图片';
+  if (emptyMessage) {
+    emptyMessage.textContent = allSubjects.length
+      ? `没有匹配的${noun}，请修改 @ 后的名称`
+      : `请先上传${noun}`;
+  }
+  // 标题与创建行随模式改措辞：视频侧叫"主体"，图片侧就是"参考图"。
+  const title = document.querySelector('#subject-panel .popover-title');
+  if (title) title.textContent = `选择已上传${noun}`;
+  const createTitle = document.querySelector('#subject-panel .subject-create-copy strong');
+  if (createTitle) createTitle.textContent = isVideoMode ? '创建主体' : '添加参考图';
+  const createHint = document.querySelector('#subject-panel .subject-create-copy small');
+  if (createHint) createHint.textContent = '上传图片后可在提示词中用 @ 引用';
   // 创建入口**不再**随主体数量隐藏：它是常驻行，用户随时能再加一个主体。
   // （此前一旦已存在主体就把该按钮置为 hidden，用户反而找不到入口。）
   list.hidden = subjects.length === 0;
@@ -1732,22 +1759,38 @@ function insertSubjectMention(subject) {
   composerPrompt.focus();
 }
 
-function syncSubjectMentionMenu() {
-  if (selectedMediaType !== 'video') return;
-  const panel = document.querySelector('#subject-panel');
+// @ 提及菜单：图片与视频模式**都**可用。
+//
+// 此前该函数在非视频模式下会直接返回，于是图片模式打 @ 毫无反应——
+// 而参考图恰恰是图片模式最常用的输入。
+//
+// 锚点要分情况：视频模式有可见的 @ 工具栏按钮；图片模式没有该按钮
+// （它属于隐藏的视频工具栏），必须换用提示词输入框，否则
+// getBoundingClientRect() 全是 0，面板会飘到屏幕角落。
+function mentionAnchor(panel) {
   const trigger = document.querySelector('[data-subject-trigger]');
-  if (!panel || !trigger) return;
-  if (activeSubjectMention()) {
+  if (trigger && trigger.offsetParent !== null) return trigger;
+  return panel.closest('.composer-prompt-shell') || composerPrompt || form;
+}
+
+function syncSubjectMentionMenu() {
+  const panel = document.querySelector('#subject-panel');
+  if (!panel) return;
+  const active = activeSubjectMention();
+  if (active) {
     renderVideoSubjects();
     closeParameterPanels(panel.id);
     panel.hidden = false;
     panel.dataset.mentionOpen = '1';
-    trigger.setAttribute('aria-expanded', 'true');
-    positionParameterPanel(trigger, panel);
+    const anchor = mentionAnchor(panel);
+    const trigger = document.querySelector('[data-subject-trigger]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    if (anchor) positionParameterPanel(anchor, panel);
   } else if (panel.dataset.mentionOpen) {
     delete panel.dataset.mentionOpen;
     panel.hidden = true;
-    trigger.setAttribute('aria-expanded', 'false');
+    const trigger = document.querySelector('[data-subject-trigger]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
   }
 }
 
@@ -1814,9 +1857,14 @@ function bindVideoWorkbenchControls() {
   document.querySelector("[data-subject-list]")?.addEventListener("click", (event) => {
     const item = event.target.closest("[data-subject-id]");
     if (!item) return;
-    selectedVideoSubjectId = item.dataset.subjectId || "";
-    syncSelectedVideoSubjectInput();
-    const subject = videoSubjectEntries().find((entry) => entry.id === item.dataset.subjectId);
+    // 视频模式：记录所选主体（会作为 subject_index 提交，并被排到参考首位）。
+    // 图片模式：没有主体概念，只把引用插进提示词，不动视频侧的隐藏输入，
+    // 否则会留下一个与当前模式无关的 subject_id。
+    if (selectedMediaType === 'video') {
+      selectedVideoSubjectId = item.dataset.subjectId || "";
+      syncSelectedVideoSubjectInput();
+    }
+    const subject = referenceMentionEntries().find((entry) => entry.id === item.dataset.subjectId);
     insertSubjectMention(subject);
     renderVideoSubjects();
     closeParameterPanels();

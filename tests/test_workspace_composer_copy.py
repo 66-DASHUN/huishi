@@ -202,3 +202,61 @@ def test_subject_create_row_is_styled_and_clickable():
     assert ".subject-create-mark {" in css
     assert ".subject-create-copy small {" in css
     assert 'document.querySelector("[data-add-subject-image]")?.addEventListener("click"' in source
+
+
+def test_mention_menu_is_available_outside_video_mode():
+    """@ 引用必须在图片模式也可用。
+
+    此前 syncSubjectMentionMenu 第一行是
+    `if (selectedMediaType !== 'video') return;`，图片模式下打 @ 毫无反应。
+    而参考图恰恰是图片模式最常用的输入——视频侧本来就有工具栏按钮，
+    缺的只是图片侧。
+    """
+    source = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    assert "if (selectedMediaType !== 'video') return;" not in source
+    assert "function syncSubjectMentionMenu()" in source
+    # 候选入口与媒体类型无关
+    assert "function referenceMentionEntries()" in source
+    assert "function videoSubjectEntries()" in source
+
+
+def test_mention_panel_uses_a_visible_anchor_per_mode():
+    """锚点必须按模式选择。
+
+    视频模式有可见的 @ 工具栏按钮；图片模式没有（它属于隐藏的视频工具栏），
+    必须回落到提示词区域，否则 getBoundingClientRect() 全是 0，面板会飘到角落。
+    """
+    source = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    assert "function mentionAnchor(panel)" in source
+    assert "trigger.offsetParent !== null" in source
+    assert "panel.closest('.composer-prompt-shell')" in source
+
+
+def test_mention_click_does_not_write_video_state_in_image_mode():
+    """图片模式选中引用不得写视频的 subject_id，否则会残留无关状态。"""
+    source = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    assert "if (selectedMediaType === 'video') {\n      selectedVideoSubjectId" in source
+    # 语句顺序：先插入引用，再刷新
+    assert "insertSubjectMention(subject);" in source
+
+
+def test_mention_copy_follows_the_media_type():
+    """措辞要随模式变化：视频说"主体"，图片说"参考图"。"""
+    source = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    assert "const noun = isVideoMode ? '主体' : '参考图';" in source
+    assert "`没有匹配的${noun}，请修改 @ 后的名称`" in source
+    assert "`请先上传${noun}`" in source
+    assert "isVideoMode ? '创建主体' : '添加参考图'" in source
+
+
+def test_switching_media_type_resyncs_the_mention_panel():
+    """切换创作类型后要重新同步：锚点与措辞都会变。"""
+    source = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    assert "syncSubjectMentionMenu();" in source
+    tail = source[source.index("function syncVideoToolbar()"):source.index("function syncVideoOptions()")]
+    assert "syncSubjectMentionMenu();" in tail
