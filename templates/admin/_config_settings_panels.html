@@ -92,25 +92,25 @@
 
   <section class="settings-table-section" id="settings-runtime" aria-labelledby="runtime-table-title">
     <header class="settings-table-head"><div><h2 id="runtime-table-title">运行配置</h2><p>在线 Agent 由服务器服务提供；本地 Agent/MCP 仅影响当前电脑上的连接。</p></div></header>
-    <div class="config-table-scroll">
+    <div class="config-table-scroll" data-runtime-grid>
       <table class="config-table key-value-config-table">
         <thead><tr><th>分组</th><th>配置项</th><th>值</th></tr></thead>
-        <tbody data-runtime-group="billing-canvas" aria-label="计费与画布">
-          <tr class="config-table-group-title"><th colspan="3" scope="rowgroup">计费与画布</th></tr>
+        <tbody id="runtime-group-billing-canvas" data-runtime-group="billing-canvas" aria-label="计费与画布">
+          <tr class="config-table-group-title" data-runtime-group-title="billing-canvas"><th colspan="3" scope="rowgroup"><button type="button" class="config-group-toggle" data-runtime-toggle="billing-canvas" aria-expanded="true" aria-controls="runtime-group-billing-canvas"><span class="config-group-caret" aria-hidden="true"></span><span>计费与画布</span><small class="config-group-hint" data-runtime-group-hint="billing-canvas"></small></button></th></tr>
           <tr id="settings-user-key"><td data-label="分组">计费</td><td data-label="配置项">用户自备 API Key</td><td data-label="值"><input form="settings-main-form" type="hidden" name="user_key_enabled_submitted" value="1"><label class="config-check"><input form="settings-main-form" type="checkbox" name="user_key_enabled" value="1" {% if user_key_enabled %}checked{% endif %}> 允许用户配置自己的 Key</label></td></tr>
           <tr id="settings-canvas"><td data-label="分组">画布入口</td><td data-label="配置项">画布应用地址</td><td data-label="值"><input form="settings-main-form" name="canvas_app_url" value="{{ canvas_settings.get('canvas_app_url', '') }}" placeholder="http://127.0.0.1:3000"></td></tr>
           <tr><td data-label="分组">画布入口</td><td data-label="配置项">画布生成配置</td><td data-label="值"><a href="#settings-image">模型与在线助手</a> · <a href="{{ url_for('admin.config_billing') }}">计费规则</a></td></tr>
           <tr><td data-label="分组">画布入口</td><td data-label="配置项">默认模板</td><td data-label="值"><textarea form="settings-main-form" name="canvas_default_template" rows="3">{{ canvas_settings.get('canvas_default_template', '') }}</textarea></td></tr>
         </tbody>
-        <tbody data-runtime-group="agent" aria-label="Agent">
-          <tr class="config-table-group-title"><th colspan="3" scope="rowgroup">Agent</th></tr>
+        <tbody id="runtime-group-agent" data-runtime-group="agent" aria-label="Agent">
+          <tr class="config-table-group-title" data-runtime-group-title="agent"><th colspan="3" scope="rowgroup"><button type="button" class="config-group-toggle" data-runtime-toggle="agent" aria-expanded="true" aria-controls="runtime-group-agent"><span class="config-group-caret" aria-hidden="true"></span><span>Agent</span><small class="config-group-hint" data-runtime-group-hint="agent"></small></button></th></tr>
           <tr id="settings-online-agent"><td data-label="分组">在线 Agent（服务器）</td><td data-label="配置项">在线助手连接</td><td data-label="值"><span class="config-readonly-value">{{ '已启用' if canvas_diagnostics.online_agent_ready else '依赖画布地址和文本 Provider' }}</span><small>在线助手使用服务器上的文本 Provider；在线 Agent 不读取这里的本地地址或 Token。</small></td></tr>
           <tr id="settings-local-agent"><td data-label="分组">本地 Agent/MCP（本机）</td><td data-label="配置项">本地 Agent 连接（本地 Agent/MCP 地址）</td><td data-label="值"><input form="settings-main-form" name="canvas_agent_url" value="{{ canvas_settings.get('canvas_agent_url', '') }}" placeholder="http://127.0.0.1:17371"><small>仅浏览器本机连接使用；不会改变服务器在线助手。</small></td></tr>
           <tr><td data-label="分组">本地 Agent/MCP（本机）</td><td data-label="配置项">Agent Token</td><td data-label="值"><input form="settings-main-form" name="canvas_agent_token" type="password" value="" autocomplete="off" placeholder="留空则保持已保存值"></td></tr>
           <tr><td data-label="分组">本地 Agent/MCP（本机）</td><td data-label="配置项">本地启动参数</td><td data-label="值"><textarea form="settings-main-form" name="canvas_local_start_cmd" rows="2">{{ canvas_settings.get('canvas_local_start_cmd', '') }}</textarea><form method="post" action="{{ url_for('admin.config_settings_diagnostics') }}" class="config-inline-action"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">运行诊断</button></form></td></tr>
         </tbody>
-        <tbody data-runtime-group="mail" aria-label="邮件">
-          <tr class="config-table-group-title"><th colspan="3" scope="rowgroup">邮件</th></tr>
+        <tbody id="runtime-group-mail" data-runtime-group="mail" aria-label="邮件">
+          <tr class="config-table-group-title" data-runtime-group-title="mail"><th colspan="3" scope="rowgroup"><button type="button" class="config-group-toggle" data-runtime-toggle="mail" aria-expanded="true" aria-controls="runtime-group-mail"><span class="config-group-caret" aria-hidden="true"></span><span>邮件</span><small class="config-group-hint" data-runtime-group-hint="mail"></small></button></th></tr>
           <tr id="settings-smtp"><td data-label="分组">邮件</td><td data-label="配置项">SMTP 主机 / 端口</td><td data-label="值" class="config-field-pair"><input form="settings-main-form" name="smtp_host" value="{{ smtp_form_values.host }}" placeholder="smtp.example.com"><input form="settings-main-form" name="smtp_port" value="{{ smtp_form_values.port }}" inputmode="numeric" placeholder="465"></td></tr>
           <tr><td data-label="分组">邮件</td><td data-label="配置项">SMTP 用户 / 发件邮箱</td><td data-label="值" class="config-field-pair"><input form="settings-main-form" name="smtp_user" value="{{ smtp_form_values.user }}"><input form="settings-main-form" name="smtp_from" value="{{ smtp_form_values.from }}"></td></tr>
           <tr><td data-label="分组">邮件</td><td data-label="配置项">SMTP 密码</td><td data-label="值"><input form="settings-main-form" name="smtp_password" type="password" value="" autocomplete="off" placeholder="{% if has_smtp_password %}已保存，留空保持{% else %}输入邮箱授权码{% endif %}">{% if has_saved_smtp_password %}<label class="config-check"><input form="settings-main-form" type="checkbox" name="clear_smtp_password" value="1"> 清除已保存密码</label>{% endif %}</td></tr>
@@ -122,6 +122,91 @@
     <footer class="settings-save-row"><span>Provider 在各自编辑窗口中单独保存。</span><button form="settings-main-form" type="submit" class="settings-submit">保存系统配置</button></footer>
   </section>
 </div>
+
+<script>
+// 运行配置分组折叠：首屏立即按保存状态收起，避免"先展开再收起"的闪动。
+//
+// 放在内联脚本而不是 settings.js 里，有两个原因：
+//   1. settings.js 是 defer 的，等它执行时内容已经渲染过一帧；
+//   2. settings.js 的 enhance() 在渠道目录解析失败时会提前 return，
+//      折叠逻辑若挂在里面会跟着静默失效。
+//
+// 默认展开、由脚本收起（渐进增强）：脚本若被拦或报错，内容仍然完整可见，
+// 不会出现"看不到任何配置项"的最坏情况。
+(function () {
+  var KEY = "huishi:runtime-groups";
+  var root = document.querySelector("[data-runtime-grid]") || document;
+  var toggles = Array.prototype.slice.call(root.querySelectorAll("[data-runtime-toggle]"));
+  if (!toggles.length) return;
+
+  var saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {};
+  } catch (error) {
+    saved = {};
+  }
+  if (typeof saved !== "object" || Array.isArray(saved)) saved = {};
+
+  function rowsOf(key) {
+    var body = document.getElementById("runtime-group-" + key);
+    if (!body) return [];
+    return Array.prototype.slice.call(body.querySelectorAll("tr")).filter(function (row) {
+      return !row.hasAttribute("data-runtime-group-title");
+    });
+  }
+
+  function apply(key, expanded, persist) {
+    var toggle = root.querySelector('[data-runtime-toggle="' + key + '"]');
+    if (!toggle) return;
+    rowsOf(key).forEach(function (row) {
+      row.hidden = !expanded;
+    });
+    toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    var hint = toggle.querySelector("[data-runtime-group-hint]");
+    if (hint) {
+      // 收起时提示组内有多少项，让"折起来"不等于"看不见"
+      hint.textContent = expanded ? "" : rowsOf(key).length + " 项";
+    }
+    if (persist) {
+      saved[key] = expanded;
+      try {
+        localStorage.setItem(KEY, JSON.stringify(saved));
+      } catch (error) {
+        /* 隐私模式下写不进去，不影响本次交互 */
+      }
+    }
+  }
+
+  toggles.forEach(function (toggle) {
+    var key = toggle.getAttribute("data-runtime-toggle");
+    // 首屏：有保存状态就照它，没有则默认收起（这正是"简化"的目的）
+    var expanded = Object.prototype.hasOwnProperty.call(saved, key) ? Boolean(saved[key]) : false;
+    apply(key, expanded, false);
+    toggle.addEventListener("click", function () {
+      var next = toggle.getAttribute("aria-expanded") !== "true";
+      apply(key, next, true);
+    });
+  });
+
+  // 深链必须展开对应分组，否则 #settings-canvas 之类会跳到一片空白。
+  function expandForHash() {
+    var id = String(location.hash || "").replace(/^#/, "");
+    if (!id) return;
+    var target = document.getElementById(id);
+    if (!target) return;
+    var body = target.closest ? target.closest("[data-runtime-group]") : null;
+    if (!body) return;
+    var key = body.getAttribute("data-runtime-group");
+    if (key && root.querySelector('[data-runtime-toggle="' + key + '"]')) apply(key, true, false);
+  }
+  expandForHash();
+  window.addEventListener("hashchange", expandForHash);
+
+  // 脚本已接管：让 CSS 知道可以按 hidden 收起（无脚本时 CSS 不生效，内容始终可见）
+  var table = root.querySelector(".key-value-config-table") || document.querySelector(".key-value-config-table");
+  if (table) table.setAttribute("data-groups-enhanced", "1");
+})();
+</script>
 
 <script type="application/json" id="image-provider-catalog">{{ {'catalog': image_model_catalog, 'metadata': image_provider_metadata, 'video_catalog': video_model_catalog, 'video_metadata': video_provider_metadata, 'audio_catalog': audio_model_catalog, 'audio_metadata': audio_provider_metadata}|tojson }}</script>
 

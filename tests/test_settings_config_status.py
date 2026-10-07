@@ -768,3 +768,59 @@ def test_settings_tables_stack_without_horizontal_page_overflow():
     assert 'content: attr(data-label);' in css
     assert ".admin-console-page .config-table-scroll" in css
     assert "overflow-x: auto;" in css
+
+
+def test_runtime_config_groups_are_collapsible(tmp_path):
+    """运行配置的每个分组都要有可点击的折叠开关。
+
+    `<details>` 在这里用不了：`<tbody>` 只允许 `<tr>`，包一层会破坏表格语义
+    与既有样式。所以组标题行做成 `<button>`，由脚本切换组内行的 hidden。
+    """
+    from app import create_app
+    from huishi.db import get_db, init_db
+
+    app = create_app(testing=True)
+    app.config["DATABASE"] = tmp_path / "test.sqlite3"
+    app.config["OUTPUT_DIR"] = tmp_path / "uploads"
+    with app.app_context():
+        init_db()
+        admin = get_db().execute("SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1").fetchone()
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["user_id"] = admin["id"]
+        response = client.get("/admin/config/settings")
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+
+    for key in ("billing-canvas", "agent", "mail"):
+        # 开关存在，且指向对应的分组容器
+        assert f'data-runtime-toggle="{key}"' in body, key
+        assert f'aria-controls="runtime-group-{key}"' in body, key
+        assert f'id="runtime-group-{key}"' in body, key
+        # 分组本体与既有测试依赖的属性都还在
+        assert f'data-runtime-group="{key}"' in body, key
+
+    # 渐进增强：默认必须是"展开"状态，由脚本收起。
+    # 若这里写成 false，则脚本一旦被拦或报错，管理员将看不到任何配置项。
+    assert 'aria-expanded="true"' in body
+
+    # 折叠逻辑必须内联，不能放进 settings.js：
+    # 后者是 defer 的（会先渲染一帧），且其 enhance() 在渠道目录解析失败时
+    # 会提前 return，折叠逻辑挂在里面会跟着静默失效。
+    assert "data-runtime-grid" in body
+    assert "huishi:runtime-groups" in body
+    assert "hashchange" in body, "深链必须能展开对应分组（/settings#settings-canvas）"
+
+
+def test_collapse_css_covers_the_narrow_screen_override():
+    """窄屏把 tbody/tr/td 改成 display:block，会盖过 hidden 自带的 display:none。
+
+    不显式处理的话，手机上折叠会失效——点了没反应，看起来像"坏了"。
+    """
+    from pathlib import Path
+
+    css = (Path(__file__).resolve().parent.parent / "static" / "css" / "site.css").read_text(encoding="utf-8")
+    assert "config-group-toggle" in css
+    assert "key-value-config-table[data-groups-enhanced] tr[hidden]" in css

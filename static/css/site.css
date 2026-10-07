@@ -10516,6 +10516,60 @@ button, input, select { font: inherit; }
   text-align: left;
 }
 
+/* 运行配置的分组折叠开关。组标题行做成按钮，而不是用 <details>：
+   <tbody> 只允许 <tr>，包一层 <details> 会破坏表格语义与既有样式。 */
+.admin-console-page .config-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-console-page .config-group-toggle:hover {
+  color: var(--admin-ok);
+}
+
+.admin-console-page .config-group-toggle:focus-visible {
+  outline: 2px solid var(--admin-ok);
+  outline-offset: 2px;
+}
+
+.admin-console-page .config-group-caret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform .15s ease;
+}
+
+.admin-console-page .config-group-toggle[aria-expanded="true"] .config-group-caret {
+  transform: rotate(90deg);
+}
+
+.admin-console-page .config-group-hint {
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* 折叠后的行必须真的不可见。
+   注意窄屏（下面那条媒体查询）把 tbody/tr/td 都改成了 display: block，
+   那会盖过 hidden 属性自带的 display: none——不显式处理的话，
+   手机上折叠会失效（点了没反应，只是视觉上"没变"）。
+   只在脚本确实接管后（data-groups-enhanced）才按 hidden 收起，
+   保证脚本失败时内容仍然可读。 */
+.admin-console-page .key-value-config-table[data-groups-enhanced] tr[hidden] {
+  display: none;
+}
+
 .admin-console-page .config-table td {
   min-height: 44px;
   overflow: hidden;
