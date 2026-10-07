@@ -131,6 +131,26 @@ class DailyFileHandler(logging.Handler):
 
 
 def configure_daily_file_logging(*, log_dir: Path | str | None = None, today=date.today) -> logging.Handler:
+    """挂上按天分文件的日志 handler，并保证**幂等**。
+
+    幂等是必需的，不是洁癖：RQ 的 job 是
+    ``run_generation_task_from_import_path('app:create_app', ...)``，也就是
+    **每跑一个生成任务就 create_app() 一次**。而 root logger 上的 handler 是
+    进程级的、不会被回收，于是每处理一个任务就多一个文件 handler：
+
+      * 日志被重复写 N 遍（2026-10-06 的日志里同一条 traceback 出现两次，
+        正是当时已经堆积了 2 个 handler 的现场）
+      * 每个 handler 各自持有一个打开的文件流，属于持续的资源泄漏
+
+    worker 是长期运行的进程，所以这个数字只增不减。这里先摘掉本模块之前挂上
+    的 handler（并关闭其文件流），再加新的。
+    """
+    root = logging.getLogger()
+    for existing in list(root.handlers):
+        if isinstance(existing, DailyFileHandler):
+            root.removeHandler(existing)
+            existing.close()
+
     target_dir = Path(log_dir or os.environ.get("HUISHI_LOG_DIR", DEFAULT_LOG_DIR))
     handler = DailyFileHandler(target_dir, today=today)
     handler.setLevel(logging.INFO)
@@ -140,7 +160,7 @@ def configure_daily_file_logging(*, log_dir: Path | str | None = None, today=dat
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
-    logging.getLogger().addHandler(handler)
+    root.addHandler(handler)
     return handler
 
 

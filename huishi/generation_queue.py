@@ -14,6 +14,7 @@ from flask import Flask
 from huishi.db import close_db, get_db, transaction, immediate_transaction, utc_now
 from huishi.generation_limits import InMemoryGenerationLimiter, RedisGenerationLimiter
 from huishi.image_api import ConfigurationError, generate_image
+from huishi.secrets import sanitize_generation_error_message
 from huishi.audio_api import AudioApiError, generate_music, generate_speech
 from huishi.providers import generate_image_with_failover
 from huishi.providers import audio_provider_candidates, video_provider_candidates, get_provider
@@ -218,9 +219,23 @@ def run_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | Non
             get_db().commit()
             cleanup_generation_outputs(generated_output_paths)
             cleanup_generation_inputs(cleanup_paths)
-        except Exception:
+        except Exception as exc:
             logger.exception("generation worker failed task_id=%s", task_id)
-            mark_generation_task_failed(task_id, "生成结果保存失败")
+            # 把真实原因也写进任务记录，而不是只留一句"生成结果保存失败"。
+            #
+            # 这句话原先是不带任何细节的兜底文案，真实堆栈只进容器日志——
+            # 而这个分支恰恰覆盖"没人预料到的异常"，最需要能直接看到原因。
+            # 2026-10-06 排查那批失败时，只能靠翻 worker 的按天日志才定位到
+            # 是 task_id 被透传进 generate_image() 引发 TypeError；日志一旦
+            # 轮转或容器重建，现场就没了。
+            #
+            # 入库前必须脱敏：错误消息可能回显上游凭据或内部地址，而
+            # _finalize / 前端展示都会把它带给用户。
+            detail = sanitize_generation_error_message(f"{type(exc).__name__}: {exc}")
+            mark_generation_task_failed(
+                task_id,
+                f"生成结果保存失败（{detail}）" if detail else "生成结果保存失败",
+            )
             finish_task_route(task_id,phase='failed',storage_status='failed')
             get_db().commit()
             cleanup_generation_outputs(generated_output_paths)
