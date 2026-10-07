@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:capability-balance-20261007` |
-| `worker` | `huishi-backend:capability-balance-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:reference-hint-20261007` |
+| `worker` | `huishi-backend:reference-hint-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:token-fragment-20261005` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-capability-balance-20261007`
+**当前回滚目标**：`huishi-backend:rollback-reference-hint-20261007`
 
 ## 版本类型约定
 
@@ -39,7 +39,8 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `capability-balance-20261007` | 2026-10-07 | 9 | `huishi-backend:capability-balance-20261007` | 正式 | **在跑** | 余额按需查询接线 + 三处能力声明缺陷修复 + pg_dump 可读错误/脱敏 + systemd 遗留清理。**首个三者齐全的 release**（Dockerfile×2 + prepare/deploy + manifest.sha256 + payload） |
+| `reference-hint-20261007` | 2026-10-07 | 8 | `huishi-backend:reference-hint-20261007` | 正式 | **在跑** | 参考素材提示接入真实能力数据（需求 ④）：接活死元素 `data-video-hint`、消除测试面板硬编码的 H3 规格、按能力隐藏永不点亮的参考类型按钮 |
+| `capability-balance-20261007` | 2026-10-07 | 9 | `huishi-backend:capability-balance-20261007` | 正式 | 已被取代 | 余额按需查询接线 + 三处能力声明缺陷修复 + pg_dump 可读错误/脱敏 + systemd 遗留清理。**首个三者齐全的 release**（Dockerfile×2 + prepare/deploy + manifest.sha256 + payload） |
 | `channel-health-20261006` | 2026-10-06 | 7 | `huishi-backend:channel-health-20261006` | 正式 | 已被取代 | 渠道健康度 + 队列生图修复 + gemini 回退。含 Dockerfile×2、prepare/deploy、payload |
 | `payloads-20261005` | 2026-10-05 | 2 | `huishi-backend:payloads-20261005` | 正式 | 已被取代 | ⚠️ **目录不完整**：只有两个 compose，无 Dockerfile/脚本 |
 | `sanitize-secrets-20261005` | 2026-10-05 | 2 | `huishi-backend:sanitize-secrets-20261005` | 正式 | 已被取代 | ⚠️ 同上 |
@@ -64,17 +65,17 @@
 ## 目录完备度实况（由 `releases/_index.py` 生成）
 
 `/opt/huishi/releases/index.json` 会逐项报告每个 release 是否具备
-`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 21 个 release 中，
-只有 2 个同时具备三者**（2026-10-07 的 `capability-balance-20261007` 起才有标准骨架）：
+`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 22 个 release 中，
+只有 3 个同时具备三者**（2026-10-07 的 `capability-balance-20261007` 起才有标准骨架）：
 
 | 能力 | 具备的 release 数 |
 |---|---|
-| 有 Dockerfile | 16 / 21 |
-| 有 prepare.sh + deploy.sh | 4 / 21（`capability-balance-20261007`、`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
-| 有 manifest | 14 / 21 |
-| **三者齐全** | **2 / 21**（`capability-balance-20261007`、`subject-reference-20261004`） |
+| 有 Dockerfile | 17 / 22 |
+| 有 prepare.sh + deploy.sh | 5 / 22（`reference-hint-20261007`、`capability-balance-20261007`、`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
+| 有 manifest | 15 / 22 |
+| **三者齐全** | **3 / 22**（`reference-hint-20261007`、`capability-balance-20261007`、`subject-reference-20261004`） |
 
-`capability-balance-20261007`（2026-10-07）是**首个按标准骨架产出**的 release：
+`capability-balance-20261007`（2026-10-07）是**首个按标准骨架产出**的 release，`reference-hint-20261007` 沿用同一骨架：
 Dockerfile×2 + prepare.sh + deploy.sh + compose.release/rollback + manifest.sha256 + payload。
 
 > 注：`subject-reference-20261004` 也判定为齐全，但它缺 `payload-worker` 与验证脚本，
