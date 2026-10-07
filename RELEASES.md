@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:format-marker-20261007` |
-| `worker` | `huishi-backend:format-marker-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:unify-wording-20261007` |
+| `worker` | `huishi-backend:unify-wording-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:token-fragment-20261005` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-format-marker-20261007`
+**当前回滚目标**：`huishi-backend:rollback-unify-wording-20261007`
 
 ## 版本类型约定
 
@@ -39,7 +39,8 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `format-marker-20261007` | 2026-10-07 | 8 | `huishi-backend:format-marker-20261007` | 正式 | **在跑** | 参考目录降级不再依赖错误文案（需求 ②）：改用异常标记判断，消除「改一句提示语就静默断开降级」的隐患 |
+| `unify-wording-20261007` | 2026-10-07 | 8 | `huishi-backend:unify-wording-20261007` | 正式 | **在跑** | 统一三个视频适配器「不支持此模型」的措辞并带上模型名（需求 ②） |
+| `format-marker-20261007` | 2026-10-07 | 8 | `huishi-backend:format-marker-20261007` | 正式 | 已被取代 | 参考目录降级不再依赖错误文案（需求 ②）：改用异常标记判断，消除「改一句提示语就静默断开降级」的隐患 |
 | `unify-adapter-http-20261007` | 2026-10-07 | 8 | `huishi-backend:unify-adapter-http-20261007` | 正式 | 已被取代 | jiasuapi 复用统一 HTTP 层（需求 ②）：删除自建的 `_url`/`_headers`/`_request`，补上此前缺失的 `allow_redirects=False`，错误文案统一为 `HTTP <code>: <message>` |
 | `paused-tasks-20261007` | 2026-10-07 | 8 | `huishi-backend:paused-tasks-20261007` | 正式 | 已被取代 | 待核对视频任务在运行总览可见（需求 ⑥）：新增健康探针 + 首页链接直达待核对表格；抽出共用查询消除首页与列表的数字漂移 |
 | `reference-hint-20261007` | 2026-10-07 | 8 | `huishi-backend:reference-hint-20261007` | 正式 | 已被取代 | 参考素材提示接入真实能力数据（需求 ④）：接活死元素 `data-video-hint`、消除测试面板硬编码的 H3 规格、按能力隐藏永不点亮的参考类型按钮 |
@@ -68,17 +69,17 @@
 ## 目录完备度实况（由 `releases/_index.py` 生成）
 
 `/opt/huishi/releases/index.json` 会逐项报告每个 release 是否具备
-`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 25 个 release 中，
-只有 6 个同时具备三者**（2026-10-07 的 `capability-balance-20261007` 起才有标准骨架）：
+`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 26 个 release 中，
+只有 7 个同时具备三者**（2026-10-07 的 `capability-balance-20261007` 起才有标准骨架）：
 
 | 能力 | 具备的 release 数 |
 |---|---|
-| 有 Dockerfile | 20 / 25 |
-| 有 prepare.sh + deploy.sh | 8 / 25（`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
-| 有 manifest | 18 / 25 |
-| **三者齐全** | **6 / 25**（`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`subject-reference-20261004`） |
+| 有 Dockerfile | 21 / 26 |
+| 有 prepare.sh + deploy.sh | 9 / 26（`unify-wording-20261007`、`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
+| 有 manifest | 19 / 26 |
+| **三者齐全** | **7 / 26**（`unify-wording-20261007`、`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`subject-reference-20261004`） |
 
-`capability-balance-20261007`（2026-10-07）是**首个按标准骨架产出**的 release，`reference-hint-20261007`、`paused-tasks-20261007`、`unify-adapter-http-20261007`、`format-marker-20261007` 沿用同一骨架：
+`capability-balance-20261007`（2026-10-07）是**首个按标准骨架产出**的 release，`reference-hint-20261007`、`paused-tasks-20261007`、`unify-adapter-http-20261007`、`format-marker-20261007`、`unify-wording-20261007` 沿用同一骨架：
 Dockerfile×2 + prepare.sh + deploy.sh + compose.release/rollback + manifest.sha256 + payload。
 
 > 注：`subject-reference-20261004` 也判定为齐全，但它缺 `payload-worker` 与验证脚本，
