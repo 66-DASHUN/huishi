@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:entry-priority-20261007` |
-| `worker` | `huishi-backend:entry-priority-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:subject-create-row-20261008` |
+| `worker` | `huishi-backend:subject-create-row-20261008`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:token-fragment-20261005` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-entry-priority-20261007`
+**当前回滚目标**：`huishi-backend:rollback-subject-create-row-20261008`
 
 ## 版本类型约定
 
@@ -39,7 +39,8 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `entry-priority-20261007` | 2026-10-07 | 8 | `huishi-backend:entry-priority-20261007` | 正式 | **在跑** | 模型条目的优先级真正生效：`priority` 此前不在字段白名单里，保存后**任何一次读取都会丢弃**，导致「模型可单独设置优先级」完全空转。补齐白名单 + 候选按（条目优先、缺失回落渠道）排序。现有条目值均为 100 与渠道级相同，故行为不变、零迁移 |
+| `subject-create-row-20261008` | 2026-10-08 | 8 | `huishi-backend:subject-create-row-20261008` | 正式 | **在跑** | 用户页 UI：①「创建主体」改为常驻行，此前它藏在空状态里、一旦有主体就被隐藏，想再加一个时入口反而消失；②拖拽参考素材同时携带友好名（结果图用提示词、素材卡用显示名），修掉界面出现 `huishi_xxx.png` / `canvas_xxx.png` 这类存储名的问题 |
+| `entry-priority-20261007` | 2026-10-07 | 8 | `huishi-backend:entry-priority-20261007` | 正式 | 已被取代 | 模型条目的优先级真正生效：`priority` 此前不在字段白名单里，保存后**任何一次读取都会丢弃**，导致「模型可单独设置优先级」完全空转。补齐白名单 + 候选按（条目优先、缺失回落渠道）排序。现有条目值均为 100 与渠道级相同，故行为不变、零迁移 |
 | `runtime-groups-20261007` | 2026-10-07 | 8 | `huishi-backend:runtime-groups-20261007` | 正式 | 已被取代 | 运行配置按分组折叠（需求 ③）：组标题行做成开关，默认收起；深链自动展开、窄屏不失效、脚本失败时内容仍可见 |
 | `log-handler-20261007` | 2026-10-07 | 8 | `huishi-backend:log-handler-20261007` | 正式 | 已被取代 | 日志 handler 不再随 create_app 堆积（消除日志重复与文件流泄漏）；兜底失败留下可诊断的异常类型 |
 | `unify-wording-20261007` | 2026-10-07 | 8 | `huishi-backend:unify-wording-20261007` | 正式 | 已被取代 | 统一三个视频适配器「不支持此模型」的措辞并带上模型名（需求 ②） |
