@@ -223,12 +223,79 @@ function videoModelCapabilities() {
   return modelCatalogForMediaType("video").find((entry) => entry.id === modelInput?.value)?.capabilities || {};
 }
 
+// 参考素材提示语：全部数字从所选模型的 capabilities 派生。
+// 这段提示原本是模板里的一个死元素（<small data-video-hint hidden>），
+// 全仓库没有任何 JS 给它赋值，用户永远看不到——能力数据明明就在
+// syncVideoCapabilityControls 手里，却没有出口。
+// 注意与 static/js/settings.js 里测试面板那份文案**刻意不共用**：
+// 两者形态不同（工作台要简洁、测试面板要详尽到字节与时长），
+// 强行抽成同一字符串只会让两边都别扭。
+function describeVideoReferenceHint(caps) {
+  if (!caps || typeof caps !== "object") return "";
+  const modes = new Set(Array.isArray(caps.modes) ? caps.modes : []);
+  if (!modes.size) return "";
+
+  const toMiB = (bytes) => {
+    const value = Number(bytes);
+    if (!Number.isFinite(value) || value <= 0) return "";
+    const mib = value / (1024 * 1024);
+    return String(Number(mib.toFixed(1)));
+  };
+
+  const limit = (key) => {
+    const value = Number(caps[key]);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  };
+
+  const parts = [];
+  if (modes.has("omni_reference")) {
+    const images = limit("max_reference_images");
+    const videos = limit("max_reference_videos");
+    const audios = limit("max_reference_audios");
+    const total = limit("max_references");
+    const pieces = [];
+    if (images) pieces.push(`图片≤${images}`);
+    if (videos) pieces.push(`视频≤${videos}`);
+    if (audios) pieces.push(`音频≤${audios}`);
+    if (pieces.length) {
+      parts.push(`不上传为文生；${pieces.join("、")}${total ? `，合计≤${total}` : ""}`);
+    } else {
+      parts.push("不上传为文生");
+    }
+    const imageBytes = toMiB(caps.max_image_bytes);
+    const videoBytes = toMiB(caps.max_video_bytes);
+    const audioBytes = toMiB(caps.max_audio_bytes);
+    const sizePieces = [];
+    if (imageBytes) sizePieces.push(`图≤${imageBytes}MiB`);
+    if (videoBytes) sizePieces.push(`视频≤${videoBytes}MiB`);
+    if (audioBytes) sizePieces.push(`音频≤${audioBytes}MiB`);
+    if (sizePieces.length) parts.push(sizePieces.join("、"));
+  } else {
+    const images = limit("max_reference_images");
+    const single = images === 1;
+    parts.push(`不上传即为文生视频；${single ? "最多 1 张参考图" : `参考图片最多${images || 1}张`}`);
+    const imageBytes = toMiB(caps.max_image_bytes);
+    const totalBytes = toMiB(caps.max_images_total_bytes);
+    const sizePieces = [];
+    if (imageBytes) sizePieces.push(`单张≤${imageBytes}MiB`);
+    if (totalBytes) sizePieces.push(`合计≤${totalBytes}MiB`);
+    if (sizePieces.length) parts.push(sizePieces.join("、"));
+  }
+  return parts.length ? `${parts.join("；")}。` : "";
+}
+
+// 参考类型 → 后端 capability 的映射。按钮是否可用完全由这个 capability
+// 是否出现在渠道下发的 modes 里决定（见 syncVideoCapabilityControls）。
+// 原先后三项带 badge 字段（"New"/"Beta"），但全仓库没有任何地方读取它——
+// 纯死数据，已删。
 const referenceTypeDefinitions = [
   { value: "reference", label: "全能参考", capability: "omni_reference" },
   { value: "keyframes", label: "首尾帧", capability: "keyframes" },
-  { value: "multi_frame", label: "智能多帧", badge: "New", capability: "reference_images" },
-  { value: "smart_edit", label: "智能编辑", badge: "Beta", capability: "smart_edit" },
-  { value: "long_video", label: "超长视频", badge: "Beta", capability: "long_video" },
+  { value: "multi_frame", label: "智能多帧", capability: "reference_images" },
+  // 后两项对应的 capability 目前**没有任何渠道声明**，因此始终不可见。
+  // 保留定义是为了等上游支持时只需在后端 modes 里加上即可生效。
+  { value: "smart_edit", label: "智能编辑", capability: "smart_edit" },
+  { value: "long_video", label: "超长视频", capability: "long_video" },
 ];
 
 function setVideoOptionButtons(selector, values, currentValue, formatter = (value) => String(value), showUnsupported = false) {
@@ -373,7 +440,13 @@ function syncVideoCapabilityControls() {
     const supported = modes.has(definition?.capability);
     const label = button.querySelector('span');
     if (label && definition?.capability === 'reference_images') label.textContent = Number(caps.max_reference_images || 1) > 1 ? '多图参考' : '单图参考';
-    button.hidden = false;
+    // 不支持的参考类型直接隐藏，与 setVideoOptionButtons 的既有约定一致。
+    // 原先写死 hidden=false 是为了"让用户看到能力边界"，但 smart_edit / long_video
+    // 这两个 capability 后端**从不声明**（生产库零引用），于是它们永远是灰的——
+    // 永久不可用的按钮只会让人怀疑是自己没配好。
+    // 注意 multi_frame 不同：它映射到 reference_images，seedance 系有、H3 没有，
+    // 所以"随渠道变化"的按钮由这里按 supported 决定显隐，正是它该有的行为。
+    button.hidden = !supported;
     button.disabled = !supported;
     button.setAttribute("aria-disabled", supported ? "false" : "true");
     button.title = supported ? "" : "当前模型暂不支持此参考类型";
@@ -388,6 +461,12 @@ function syncVideoCapabilityControls() {
   if (videoMediaReferences) {
     videoMediaReferences.disabled = !referenceModes.length;
     videoMediaReferences.accept = modes.has("omni_reference") ? "image/*,video/*,audio/*" : "image/*";
+  }
+  const hint = document.querySelector("[data-video-hint]");
+  if (hint) {
+    const text = describeVideoReferenceHint(caps);
+    hint.textContent = text;
+    hint.hidden = !text;
   }
   const camera = document.querySelector("[data-video-camera]");
   const cameraValues = Array.isArray(caps.camera_movement) ? caps.camera_movement : [];

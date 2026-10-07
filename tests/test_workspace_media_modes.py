@@ -182,3 +182,37 @@ def test_assets_template_renders_video_and_audio_players():
     assert "<video" in template
     assert "<audio" in template
     assert "record.get('media_type'" in template
+
+
+def test_video_reference_hint_is_wired_and_derived():
+    """参考素材提示必须由 capabilities 派生，且模板里的元素确实被赋值。
+
+    缺陷背景（需求 ④）：
+    * `templates/workspace.html` 的 `<small data-video-hint>` 是**死元素**——
+      全仓库没有任何 JS 给它赋值，用户永远看不到解析出来的能力上限；
+    * `static/js/settings.js` 的测试面板提示把 H3 的规格（图片≤9、视频≤3、
+      音频≤3、合计≤12）**写死**，对 seedance_media（30 张）完全失真。
+
+    这条测试锁住"读源码"的层面：元素被引用、硬编码文案已消除、并且两侧
+    都有从 caps 派生的函数。数值行为本身由 tests/check_settings_models.cjs
+    与 huishi.media_capabilities 的用例覆盖。
+    """
+    root = Path(__file__).resolve().parent.parent
+    template = (root / "templates" / "workspace.html").read_text(encoding="utf-8")
+    workspace_js = (root / "static" / "js" / "workspace.js").read_text(encoding="utf-8")
+    settings_js = (root / "static" / "js" / "settings.js").read_text(encoding="utf-8")
+
+    # 元素仍在模板里（删掉它会让下面的查询变成空操作而无人察觉）
+    assert "data-video-hint" in template
+    # 并且真的被 JS 查询与赋值
+    assert 'document.querySelector("[data-video-hint]")' in workspace_js
+    assert "describeVideoReferenceHint" in workspace_js
+    assert "hint.textContent = text" in workspace_js
+
+    # 硬编码的 H3 规格必须消失
+    assert "图片≤9、视频≤3、音频≤3，合计≤12" not in settings_js
+    assert "describeTestReferenceHint" in settings_js
+    assert "describeTestReferenceHint(caps)" in settings_js
+
+    # 不支持的能力对应的按钮应隐藏，而不是永远灰着
+    assert "button.hidden = !supported;" in workspace_js

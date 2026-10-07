@@ -204,7 +204,7 @@
           <input name="media_references" data-video-media-references type="file" multiple accept="image/*,video/*,audio/*" hidden>
           <input data-subject-image-input type="file" multiple accept="image/*" hidden>
           <div class="video-reference-materials" data-video-reference-materials aria-live="polite" hidden></div>
-          <small data-video-hint hidden></small>
+          <small data-video-hint aria-live="polite" hidden></small>
         </div>
         <div class="audio-generation-options" data-audio-options hidden>
           <label><span>音色</span><select name="voice_id"><option value="alloy">Alloy</option><option value="nova">Nova</option><option value="shimmer">Shimmer</option><option value="echo">Echo</option></select></label>
@@ -344,5 +344,5 @@
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/workspace.js', v='20261004-task-order-1') }}"></script>
+  <script src="{{ url_for('static', filename='js/workspace.js', v='20261007-reference-hint-1') }}"></script>
 {% endblock %}

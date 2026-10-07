@@ -4,6 +4,78 @@
   if (root) root.HuishiSettingsModels = api;
   if (root?.document) api.enhance(root.document);
 })(typeof window !== "undefined" ? window : globalThis, () => {
+  // 参考素材提示语：数字全部取自渠道下发的 capabilities。
+  //
+  // 原先是写死的 H3 规格（图片≤9、视频≤3、音频≤3、合计≤12），对 H3 恰好正确，
+  // 但对 seedance_media（30 张、单张 12MiB、合计 70MiB）完全失真——管理员在
+  // 测试面板看到的是另一个模型的规格。
+  //
+  // 与 static/js/workspace.js 的 describeVideoReferenceHint 刻意不共用：
+  // 这里面向管理员做渠道测试，要详尽（含字节与时长约束、首尾帧互斥）；
+  // 工作台面向普通用户，要简洁。同一份数据、两种表达。
+  function describeTestReferenceHint(caps) {
+    if (!caps || typeof caps !== "object") return "不上传即为文生视频。";
+    const modes = new Set(Array.isArray(caps.modes) ? caps.modes : []);
+    // 没有能力声明时不能编造数字：早先的兜底会写出"最多1张"，
+    // 而实际既没声明上限、也没声明支持参考图，属于凭空断言。
+    if (!modes.size) return "不上传即为文生视频。";
+    const toMiB = (bytes) => {
+      const value = Number(bytes);
+      if (!Number.isFinite(value) || value <= 0) return "";
+      return String(Number((value / (1024 * 1024)).toFixed(1)));
+    };
+    const limit = (key) => {
+      const value = Number(caps[key]);
+      return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    };
+
+    if (!modes.has("omni_reference")) {
+      const images = limit("max_reference_images");
+      const sizes = [];
+      const imageBytes = toMiB(caps.max_image_bytes);
+      const totalBytes = toMiB(caps.max_images_total_bytes);
+      if (imageBytes) sizes.push("单张≤" + imageBytes + "MiB");
+      if (totalBytes) sizes.push("合计≤" + totalBytes + "MiB");
+      return "不上传即为文生视频；参考图片最多" + (images || 1) + "张"
+        + (sizes.length ? "，" + sizes.join("、") : "") + "。";
+    }
+
+    const pieces = [];
+    const images = limit("max_reference_images");
+    const videos = limit("max_reference_videos");
+    const audios = limit("max_reference_audios");
+    const total = limit("max_references");
+    if (images) pieces.push("图片≤" + images);
+    if (videos) pieces.push("视频≤" + videos);
+    if (audios) pieces.push("音频≤" + audios);
+    const head = pieces.length
+      ? "不上传为文生；" + pieces.join("、") + (total ? "，合计≤" + total : "")
+      : "不上传为文生";
+
+    const sizes = [];
+    const imageBytes = toMiB(caps.max_image_bytes);
+    const videoBytes = toMiB(caps.max_video_bytes);
+    const audioBytes = toMiB(caps.max_audio_bytes);
+    if (imageBytes) sizes.push("图≤" + imageBytes + "MiB");
+    if (videoBytes) sizes.push("视频≤" + videoBytes + "MiB");
+    if (audioBytes) sizes.push("音频≤" + audioBytes + "MiB");
+
+    // 音视频最短时长与"片头 15 秒"策略是这类全能参考渠道的通用约束，
+    // 上游不下发对应字段，所以保留固定表述——但只在确实支持音视频时才提。
+    let text = head;
+    if (sizes.length) text += "；" + sizes.join("、");
+    text += "。";
+    if (videos || audios) {
+      text += "音视频至少2秒，超过15秒使用片头15秒；各类有效总长≤15秒。";
+    }
+    // 互斥提示只在两者都可用时才有意义：像 jiasuapi/seedance2.5 只声明
+    // omni_reference，根本没有首尾帧选项，提醒"不可混用"只会让人困惑。
+    if (modes.has("keyframes") && modes.has("omni_reference")) {
+      text += "首尾帧与全能参考不可混用。";
+    }
+    return text;
+  }
+
   function parseImageProviderCatalog(rawCatalog) {
     if (!rawCatalog) return null;
     try {
@@ -388,7 +460,7 @@
         const files = form.querySelector("[name=media_references]");
         if (files) files.accept = omni ? "image/*,video/mp4,video/quicktime,audio/*" : "image/*";
         const hint = form.querySelector("[data-test-reference-hint]");
-        if (hint) hint.textContent = omni ? "不上传为文生；图片≤9、视频≤3、音频≤3，合计≤12。音视频至少2秒，超过15秒使用片头15秒；各类有效总长≤15秒。首尾帧与全能参考不可混用。" : `不上传即为文生视频；参考图片最多${caps.max_reference_images || 16}张。`;
+        if (hint) hint.textContent = describeTestReferenceHint(caps);
         const camera = form.querySelector("[data-test-camera]");
         if (camera) { camera.hidden = !caps.camera_movement; camera.style.display = caps.camera_movement ? "" : "none"; }
         const prompt = form.querySelector("[name=test_prompt]");
@@ -517,5 +589,5 @@
     return true;
   }
 
-  return { defaultUrlFor, enhance, mergeFetchedModels, modelEntryFromValues, parseImageProviderCatalog, protocolStateFor, rememberProtocolState, testImageUrl };
+  return { defaultUrlFor, describeTestReferenceHint, enhance, mergeFetchedModels, modelEntryFromValues, parseImageProviderCatalog, protocolStateFor, rememberProtocolState, testImageUrl };
 });
