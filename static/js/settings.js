@@ -388,7 +388,7 @@
         const files = form.querySelector("[name=media_references]");
         if (files) files.accept = omni ? "image/*,video/mp4,video/quicktime,audio/*" : "image/*";
         const hint = form.querySelector("[data-test-reference-hint]");
-        if (hint) hint.textContent = omni ? "不上传为文生；图片≤9、视频≤3、音频≤3，合计≤12。音视频至少2秒，超过15秒使用片头15秒；各类有效总长≤15秒。首尾帧与全能参考不可混用。" : `不上传即为文生视频；参考图片最多${caps.max_reference_images || 9}张。`;
+        if (hint) hint.textContent = omni ? "不上传为文生；图片≤9、视频≤3、音频≤3，合计≤12。音视频至少2秒，超过15秒使用片头15秒；各类有效总长≤15秒。首尾帧与全能参考不可混用。" : `不上传即为文生视频；参考图片最多${caps.max_reference_images || 16}张。`;
         const camera = form.querySelector("[data-test-camera]");
         if (camera) { camera.hidden = !caps.camera_movement; camera.style.display = caps.camera_movement ? "" : "none"; }
         const prompt = form.querySelector("[name=test_prompt]");

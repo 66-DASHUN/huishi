@@ -10,7 +10,8 @@
 </header>
 
 <p class="admin-section-note">
-  数据来自每次上游调用的逐条记录，窗口 {{ health["window_hours"] }} 小时。本页只读，不会向上游发起请求。
+  数据来自每次上游调用的逐条记录，窗口 {{ health["window_hours"] }} 小时。打开本页不会向上游发起任何请求；
+  余额需点击「查询余额」才会实时请求一次上游。
 </p>
 
 <section class="admin-metric-strip" aria-label="渠道指标">
@@ -76,6 +77,34 @@
       <strong role="cell" data-health-label>无数据</strong>
       <span role="cell">还没有配置任何渠道</span>
       <span role="cell">—</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="admin-section">
+  <div class="admin-section-heading">
+    <h2>账户余额</h2>
+    <span>按需查询</span>
+  </div>
+  <p class="admin-section-note">
+    余额需要实时请求上游，因此不随页面加载自动查询——避免每打开一次页面就消耗
+    上游配额。只有实现了余额接口的渠道类型（当前为 Seedance Media）显示查询按钮，
+    其余类型明确标注不提供，不会把「查不到」显示成「余额为零」。
+  </p>
+  <div class="admin-health-table" role="table" aria-label="渠道账户余额">
+    {% for channel in health["channels"] %}
+    <div role="row">
+      <span role="cell"><i></i>{{ channel["name"] or ("#" ~ channel["id"]) }}</span>
+      <span role="cell">
+        {% if channel["api_format"] == "seedance_media" %}
+        <button type="button" class="admin-balance-button" data-balance-query
+                data-balance-url="{{ url_for('admin.channel_balance', provider_id=channel['id']) }}">查询余额</button>
+        {% else %}
+        <small>该渠道类型不提供余额查询</small>
+        {% endif %}
+      </span>
+      <span role="cell" data-balance-result>—</span>
     </div>
     {% endfor %}
   </div>

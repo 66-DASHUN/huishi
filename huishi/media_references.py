@@ -70,14 +70,44 @@ def inspect_video_file(path):
         raise ValueError('生成结果不是可解码视频或 ffprobe 不可用') from exc
 
 
-def validate_reference_metadata(protocol,metas):
+# 渠道未声明字节上限时的兜底值（= 上游文档中 seedance_media / dmc_h3 的规格）。
+# 声明值优先：管理员可以在渠道配置里按上游实际规格收紧，见 model_management.
+# _safe_capabilities 的白名单——它之前会把字节键丢掉，声明了也不生效。
+DEFAULT_IMAGE_BYTES = 12 * 1024 * 1024
+DEFAULT_IMAGES_TOTAL_BYTES = 70 * 1024 * 1024
+DMC_H3_BYTES = {'image': 30000000, 'video': 50000000, 'audio': 15000000}
+
+
+def _declared_bytes(caps, key, default):
+    """取渠道声明的字节上限；缺失或非法时回落默认值。"""
+    value = caps.get(key) if isinstance(caps, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return default
+    return value
+
+
+def _mib(value):
+    """把字节数写成提示语里的 MiB。整数值直接显示整数，避免 11.999 MiB 这种串。"""
+    mib = value / (1024 * 1024)
+    text = f"{mib:.1f}".rstrip('0').rstrip('.')
+    return text
+
+
+def validate_reference_metadata(protocol,metas,caps=None):
+    image_bytes = _declared_bytes(caps, 'max_image_bytes', DEFAULT_IMAGE_BYTES)
+    total_bytes = _declared_bytes(caps, 'max_images_total_bytes', DEFAULT_IMAGES_TOTAL_BYTES)
     for meta in metas:
         kind=meta['kind']
         if protocol=='seedance_media':
-            if kind!='image' or meta['bytes']>12*1024*1024:
-                raise ValueError('此渠道仅支持不超过12MiB的参考图片')
+            if kind!='image' or meta['bytes']>image_bytes:
+                # 提示语随实际生效的上限走：声明了更小的值时要报那个值，
+                # 否则管理员会看到「不超过12MiB」却被拒，无从判断。
+                raise ValueError(f'此渠道仅支持不超过{_mib(image_bytes)}MiB的参考图片')
         elif protocol=='dmc_h3':
-            limits={'image':30000000,'video':50000000,'audio':15000000}
+            # H3 的 image 上限同样以渠道声明为准（dmc_h3 内置声明 30000000）。
+            limits={'image': _declared_bytes(caps, 'max_image_bytes', DMC_H3_BYTES['image']),
+                    'video': _declared_bytes(caps, 'max_video_bytes', DMC_H3_BYTES['video']),
+                    'audio': _declared_bytes(caps, 'max_audio_bytes', DMC_H3_BYTES['audio'])}
             if meta['bytes']>limits[kind]:
                 raise ValueError('参考素材体积超过H3限制')
             if kind=='image':
@@ -86,8 +116,8 @@ def validate_reference_metadata(protocol,metas):
                     raise ValueError('H3图片尺寸、比例或动画格式不受支持')
             elif meta.get('duration',0)<2:
                 raise ValueError('H3参考音视频至少2秒')
-    if protocol=='seedance_media' and sum(m['bytes'] for m in metas)>70*1024*1024:
-        raise ValueError('参考图片总大小超过70MiB')
+    if protocol=='seedance_media' and sum(m['bytes'] for m in metas)>total_bytes:
+        raise ValueError(f'参考图片总大小超过{_mib(total_bytes)}MiB')
     if protocol=='dmc_h3':
         for kind in ('video','audio'):
             if sum(min(15,m.get('duration',0)) for m in metas if m['kind']==kind)>15:
@@ -215,7 +245,7 @@ def prepare_references(user_id,protocol,caps,request,references):
         if ref.get('is_subject') is True:
             content_item['is_subject'] = True
         content.append(content_item)
-    validate_reference_metadata(protocol,metas)
+    validate_reference_metadata(protocol,metas,caps)
     if len(keyframes)==2:
         first,last=keyframes['first_frame'],keyframes['last_frame']
         if abs((first['width']/first['height'])/(last['width']/last['height'])-1)>.02:

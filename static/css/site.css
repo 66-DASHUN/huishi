@@ -9099,6 +9099,38 @@ button, input, select { font: inherit; }
   font-size: 13px;
 }
 
+/* 余额区块：第二列放「查询余额」按钮，比纯状态文字宽一些 */
+.admin-balance-button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-balance-button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+/* 查询结果：成功用主色，失败/不支持用弱化色，避免把「查不到」看得像余额 */
+.admin-health-table [data-balance-result][data-balance-status="ok"] {
+  color: var(--admin-ink);
+  font-weight: 600;
+}
+
+.admin-health-table [data-balance-result][data-balance-status="error"],
+.admin-health-table [data-balance-result][data-balance-status="unsupported"],
+.admin-health-table [data-balance-result][data-balance-status="unknown"] {
+  color: var(--admin-muted);
+}
+
 .admin-health-table > div:last-child {
   border-bottom: 0;
 }

@@ -272,3 +272,98 @@ def test_admin_can_add_video_pricing_rule(app):
     with app.app_context():
         rule = get_db().execute("SELECT * FROM pricing_rules WHERE media_type = 'video' AND model = 'MiniMax-Hailuo-3.0'").fetchone()
         assert rule["points_per_image"] == 13
+
+def test_safe_capabilities_keeps_byte_limits(app):
+    """字节上限不能被白名单静默丢弃。
+
+    seedance_media 的 ``_catalog_config`` 从上游目录读出 ``max_image_bytes`` /
+    ``max_images_total_bytes`` 写进 capabilities；``_safe_capabilities`` 原先的
+    白名单不含这些键，落库时直接过滤掉——上游声明的体积限制根本存不下来，
+    校验只能一直用硬编码值。
+    """
+    from huishi.model_management import _safe_capabilities
+
+    caps = {
+        "max_reference_images": 30,
+        "max_image_bytes": 12 * 1024 * 1024,
+        "max_images_total_bytes": 70 * 1024 * 1024,
+        "max_video_bytes": 50000000,
+        "max_audio_bytes": 15000000,
+        "resolutions": ["720p"],
+    }
+    result = _safe_capabilities(caps)
+
+    assert result == caps
+    assert result["max_image_bytes"] == 12 * 1024 * 1024
+    assert result["max_images_total_bytes"] == 70 * 1024 * 1024
+
+
+def test_declared_image_bytes_limit_is_enforced(app):
+    """渠道声明的字节上限必须真的参与校验，而不是只在库里躺着。"""
+    from huishi.media_references import validate_reference_metadata
+
+    meta = [{"kind": "image", "bytes": 20 * 1024 * 1024, "width": 1024, "height": 1024}]
+
+    # 默认（未声明）：12MiB 上限，20MiB 必须被拒。
+    with pytest.raises(ValueError, match="MiB"):
+        validate_reference_metadata("seedance_media", meta, None)
+
+    # 声明 30MiB 后应放行。
+    validate_reference_metadata("seedance_media", meta, {"max_image_bytes": 30 * 1024 * 1024})
+
+    # 声明更严的 8MiB 后，20MiB 仍必须被拒，且提示语要报生效的那个值。
+    with pytest.raises(ValueError, match=r"不超过8MiB"):
+        validate_reference_metadata(
+            "seedance_media", meta, {"max_image_bytes": 8 * 1024 * 1024}
+        )
+
+
+def test_declared_total_bytes_limit_is_enforced(app):
+    from huishi.media_references import validate_reference_metadata
+
+    # 每张 8MiB（在默认单张 12MiB 之内，否则会先撞单张上限而测不到总量）。
+    metas = [
+        {"kind": "image", "bytes": 8 * 1024 * 1024, "width": 512, "height": 512}
+        for _ in range(3)
+    ]
+
+    # 合计 24MiB，默认 70MiB 上限内，放行。
+    validate_reference_metadata("seedance_media", metas, None)
+
+    # 声明 20MiB 上限后被拒。
+    with pytest.raises(ValueError, match=r"超过20MiB"):
+        validate_reference_metadata(
+            "seedance_media", metas, {"max_images_total_bytes": 20 * 1024 * 1024}
+        )
+
+
+def test_seedance_catalog_byte_keys_survive_a_round_trip(app):
+    """上游目录声明的字节键，经保存/读取后必须仍在。"""
+    with app.app_context():
+        init_db()
+        provider_id = save_provider(
+            provider_type="video",
+            name="Seedance Media",
+            base_url="https://seedance.example.com",
+            api_key="test-seedance-key",
+            model="seedance2.5",
+            api_format="seedance_media",
+            priority=10,
+            enabled=True,
+            models=[
+                {
+                    "id": "seedance2.5",
+                    "label": "seedance2.5",
+                    "capabilities": {
+                        "max_reference_images": 30,
+                        "max_image_bytes": 12 * 1024 * 1024,
+                        "max_images_total_bytes": 70 * 1024 * 1024,
+                    },
+                }
+            ],
+        )
+        provider = next(item for item in list_providers("video") if item["id"] == provider_id)
+        entry = next(m for m in provider["models"] if m["id"] == "seedance2.5")
+
+        assert entry["capabilities"]["max_image_bytes"] == 12 * 1024 * 1024
+        assert entry["capabilities"]["max_images_total_bytes"] == 70 * 1024 * 1024

@@ -252,3 +252,57 @@ document.querySelectorAll("form[data-confirm]").forEach((formEl) => {
     if (!window.confirm(formEl.dataset.confirm || "确认执行此操作？")) event.preventDefault();
   });
 });
+
+// ---- 渠道余额按需查询 ----
+// 余额要真发一次上游请求（见 routes_admin.channel_balance 的说明），所以只在
+// 管理员点击时查，不随页面加载自动发起。token 取法与 assets.js 一致：先请求
+// /api/csrf-token，取不到就退回页面里的隐藏字段。
+let balanceCsrfToken = "";
+fetch("/api/csrf-token")
+  .then((response) => response.json())
+  .then((payload) => {
+    balanceCsrfToken = payload.csrf_token || "";
+  })
+  .catch(() => {});
+
+document.querySelectorAll("[data-balance-query]").forEach((button) => {
+  const resultEl = button.closest('[role="row"]')?.querySelector("[data-balance-result]");
+
+  function setResult(text, status) {
+    if (!resultEl) return;
+    resultEl.textContent = text;
+    if (status) resultEl.setAttribute("data-balance-status", status);
+    else resultEl.removeAttribute("data-balance-status");
+  }
+
+  button.addEventListener("click", async () => {
+    const url = button.dataset.balanceUrl;
+    if (!url) return;
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "查询中…";
+    setResult("", "");
+    try {
+      const token = balanceCsrfToken || document.querySelector('[name="csrf_token"]')?.value || "";
+      const headers = { "X-Requested-With": "fetch", Accept: "application/json" };
+      if (token) headers["X-CSRF-Token"] = token;
+      const response = await fetch(url, { method: "POST", headers });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        setResult(payload?.error || `查询失败（HTTP ${response.status}）`, "error");
+        return;
+      }
+      const balance = payload.balance || {};
+      // 关键区分：unsupported 是「这个渠道类型没有余额接口」，不是「余额为零」。
+      if (balance.status === "ok") setResult(`余额：${balance.message}`, "ok");
+      else if (balance.status === "unsupported") setResult(balance.message || "该渠道类型不提供余额查询", "unsupported");
+      else if (balance.status === "unknown") setResult(balance.message || "上游未返回余额字段", "unknown");
+      else setResult(balance.message || "查询失败", "error");
+    } catch (error) {
+      setResult(`查询失败：${error.message}`, "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
+});

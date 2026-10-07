@@ -49,6 +49,27 @@ def save_channel(name: str, *, enabled: bool = True, api_format: str = "openai")
     return provider_id
 
 
+def save_video_channel(name: str, *, api_format: str = "seedance_media", model: str = "seedance2.5") -> int:
+    """建一个视频渠道。
+
+    ``seedance_media`` 只出现在 ``VALID_VIDEO_API_FORMATS`` 里，画像渠道
+    （上面那个 ``save_channel``）用它会直接被 ``normalize_provider_api_format``
+    拒绝，所以余额相关用例必须走视频渠道。
+    """
+    provider_id = providers.save_provider(
+        provider_type="video",
+        name=name,
+        base_url="https://example.com",
+        api_key=f"sk-{name}-secret",
+        model=model,
+        priority=100,
+        enabled=True,
+        api_format=api_format,
+    )
+    get_db().commit()
+    return provider_id
+
+
 def log(provider_id, outcome, *, latency_ms=0, error="", error_class="", **extra):
     pm.record_provider_call(
         provider_id=provider_id,
@@ -395,6 +416,113 @@ def admin_id() -> int:
     return int(
         get_db().execute("SELECT id FROM users WHERE role='admin' LIMIT 1").fetchone()["id"]
     )
+
+
+class TestChannelBalanceEndpoint:
+    """余额必须按需查询，且「不支持」不能显示成「余额为零」。"""
+
+    def test_page_does_not_query_upstream_on_load(self, app, monkeypatch):
+        """打开页面不得触发任何上游请求。
+
+        这是这个端点做成点击触发的原因：余额要真发一次上游 HTTP 请求，
+        若随页面加载批量查询，最坏会按渠道数逐个串行等待，把一个只读页面
+        拖到几十秒，还会在每次打开时消耗上游配额。
+        """
+        from huishi.video_adapters import seedance_media
+
+        calls = []
+        monkeypatch.setattr(
+            seedance_media, "balance", lambda provider: calls.append(provider) or {"balance": 1}
+        )
+        with app.app_context():
+            provider_id = save_video_channel("余额渠道")
+            who = admin_id()
+
+        client = app.test_client()
+        with app.app_context():
+            login(client, who)
+        body = client.get("/admin/channel-health").get_data(as_text=True)
+
+        assert calls == [], "页面加载不应查询余额"
+        assert "账户余额" in body
+        assert "data-balance-query" in body
+
+    def test_clicking_returns_the_balance(self, app, monkeypatch):
+        from huishi.video_adapters import seedance_media
+
+        monkeypatch.setattr(seedance_media, "balance", lambda provider: {"balance": 4242})
+        with app.app_context():
+            provider_id = save_video_channel("余额渠道")
+            who = admin_id()
+
+        client = app.test_client()
+        with app.app_context():
+            login(client, who)
+        response = client.post(
+            f"/admin/channel-health/{provider_id}/balance",
+            headers={"X-Requested-With": "fetch"},
+        )
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["ok"] is True
+        assert payload["balance"]["status"] == "ok"
+        assert payload["balance"]["balance"] == 4242
+
+    def test_unsupported_channel_type_is_explicit(self, app):
+        """非 seedance 渠道要明确说「不提供」，而不是返回 0 或报错。"""
+        with app.app_context():
+            provider_id = save_channel("openai 渠道", api_format="openai")
+            who = admin_id()
+
+        client = app.test_client()
+        with app.app_context():
+            login(client, who)
+        response = client.post(
+            f"/admin/channel-health/{provider_id}/balance",
+            headers={"X-Requested-With": "fetch"},
+        )
+
+        assert response.status_code == 200
+        balance = response.get_json()["balance"]
+        assert balance["status"] == "unsupported"
+        assert balance["balance"] is None
+        assert "不提供余额查询" in balance["message"]
+
+    def test_missing_channel_is_404(self, app):
+        with app.app_context():
+            who = admin_id()
+
+        client = app.test_client()
+        with app.app_context():
+            login(client, who)
+        response = client.post(
+            "/admin/channel-health/999999/balance",
+            headers={"X-Requested-With": "fetch"},
+        )
+
+        assert response.status_code == 404
+
+    def test_upstream_error_does_not_leak_the_api_key(self, app, monkeypatch):
+        from huishi.video_adapters import seedance_media
+
+        def boom(provider):
+            raise RuntimeError("auth failed for sk-余额渠道-secret")
+
+        monkeypatch.setattr(seedance_media, "balance", boom)
+        with app.app_context():
+            provider_id = save_video_channel("余额渠道")
+            who = admin_id()
+
+        client = app.test_client()
+        with app.app_context():
+            login(client, who)
+        body = client.post(
+            f"/admin/channel-health/{provider_id}/balance",
+            headers={"X-Requested-With": "fetch"},
+        ).get_data(as_text=True)
+
+        assert "sk-余额渠道-secret" not in body
 
 
 class TestChannelHealthPage:

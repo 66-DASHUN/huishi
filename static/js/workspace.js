@@ -2987,7 +2987,9 @@ async function submitGeneration(event) {
   let videoRequestIdentity = "";
   if (selectedMediaType === "video") {
     const capabilities = videoModelCapabilities();
-    const maxImages = Number(capabilities.max_reference_images || 99);
+    // 兜底取服务端的全局上限（HUISHI_MAX_REFERENCE_IMAGES，默认 16）。
+    // 原先这里兜底 99、settings.js 兜底 9，同一模型两个提示两个上限。
+    const maxImages = Number(capabilities.max_reference_images || maxReferenceImages);
     const orderedMaterials = orderedVideoReferenceMaterials();
     const selectedSubject = selectedVideoSubjectMaterial();
     let submittedMaterials = orderedMaterials;

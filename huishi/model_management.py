@@ -127,8 +127,13 @@ def _specs(p, e, kind):
 
 
 def _safe_capabilities(caps):
+    # 字节上限（max_image_bytes 等）必须留在白名单里：seedance_media 的
+    # ``_catalog_config`` 正是从上游目录里读出这些键写进 capabilities，
+    # 而这里之前把它们过滤掉了——上游声明的体积限制落库即被丢弃，
+    # 于是 media_references.validate_reference_metadata 只能一直用硬编码值。
     allowed = {'resolutions','durations','ratios','modes','max_reference_images','max_reference_videos',
-               'max_reference_audios','max_references','max_prompt_chars','camera_movement','supports_cancel'}
+               'max_reference_audios','max_references','max_prompt_chars','camera_movement','supports_cancel',
+               'max_image_bytes','max_images_total_bytes','max_video_bytes','max_audio_bytes'}
     result = {k:v for k,v in (caps.items() if isinstance(caps,dict) else []) if k in allowed and isinstance(v,(list,int,bool))}
     value = caps.get('duration_range') if isinstance(caps,dict) else None
     if isinstance(value,dict) and set(value) <= {'min','max','step'} and {'min','max'} <= set(value):

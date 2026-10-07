@@ -76,6 +76,56 @@ def test_jiasuapi_h3_and_seedance_capabilities_are_constrained():
         validate_video_request("minimax-h3", h3, {"prompt": "x", "duration_seconds": 3})
 
 
+def test_jiasuapi_seedance_declares_reference_image_limit():
+    """每个 seedance 分支都必须显式声明参考图上限。
+
+    缺陷背景：这几个分支原先没写 max_reference_images，于是
+    ``validate_video_request`` 落到 ``.get(limit_key, 99)`` 兜底、前端
+    ``settings.js`` 兜底 9、``workspace.js`` 兜底 99——同一个模型三处不同上限，
+    而且都不报错。上限值本身要与 seedance_media 分支的同名模型一致，
+    否则同一批上游模型在两个网关上会有两套规格。
+    """
+    from huishi.media_capabilities import video_capabilities
+
+    expected = {
+        "seedance2.5": 30,
+        "seedance-2.5-101010": 30,
+        "seedance2.0": 9,
+        "seedance-2.0-900": 9,
+        "seedance2.0fast": 9,
+    }
+    for model, limit in expected.items():
+        caps = video_capabilities("jiasuapi", model)
+        assert caps, f"{model} 的 jiasuapi 能力缺失"
+        assert caps.get("max_reference_images") == limit, model
+
+    # 与 seedance_media 分支对齐：同批模型不该有两套规格。
+    for model in ("seedance2.5", "seedance2.0"):
+        assert (
+            video_capabilities("jiasuapi", model)["max_reference_images"]
+            == video_capabilities("seedance_media", model)["max_reference_images"]
+        ), model
+
+
+def test_undeclared_reference_limit_no_longer_silently_allows_99():
+    """超过声明上限的参考图必须被拒，而不是被 99 兜底放行。"""
+    from huishi.media_capabilities import validate_video_request
+
+    caps = video_capabilities("jiasuapi", "seedance2.0")  # 9 张
+    content = [{"type": "text", "text": "x"}] + [
+        {"type": "image_url", "image_url": {"url": f"https://example.com/{i}.png"},
+         "role": "reference_image"}
+        for i in range(10)
+    ]
+    with pytest.raises(ValueError, match="超过当前模型限制"):
+        validate_video_request(
+            "seedance2.0",
+            caps,
+            {"prompt": "x", "duration_seconds": 5, "ratio": "16:9",
+             "resolution": "720p", "content": content},
+        )
+
+
 def test_reference_metadata_preserves_h3_video_duration_and_mime(monkeypatch):
     class Row(dict):
         __getattr__ = dict.__getitem__

@@ -21,15 +21,22 @@ def video_capabilities(protocol, model, configured=None):
                     max_reference_videos=3, max_reference_audios=3, max_references=15,
                     max_prompt_chars=7000, supports_cancel=False)
     elif protocol == 'jiasuapi' and ('seedance' in normalized_model or normalized_model.startswith(('sd-', 'sd2.'))) and '2.5' in normalized_model:
+        # max_reference_images 原先没声明，于是校验落到 validate_video_request 的
+        # `.get(limit_key, 99)` 兜底，而前端 settings.js 的兜底是 9、workspace.js 是 99
+        # ——三处对同一个模型给出三个不同上限，且都不报错。
+        # 这里按**同一模型在 seedance_media 分支的规格**对齐（2.5 为 30 张）：
+        # jiasuapi 与 seedance_media 是同一批上游模型的不同网关，不该有两套规格。
+        # seedance2.0 系见下一分支（9 张）。
         caps = dict(duration_range={'min': 4, 'max': 30, 'step': 1},
                     resolutions=['480p', '720p', '1080p'], ratios=['16:9', '9:16', '1:1'],
-                    modes=['text', 'keyframes', 'omni_reference'], max_prompt_chars=7000,
-                    supports_cancel=False)
+                    modes=['text', 'keyframes', 'omni_reference'], max_reference_images=30,
+                    max_prompt_chars=7000, supports_cancel=False)
     elif protocol == 'jiasuapi' and ('seedance' in normalized_model or normalized_model.startswith(('sd-', 'sd2.'))) and '2.0' in normalized_model:
+        # 同上一分支：与 seedance_media 的 seedance2.0 对齐（9 张）。
         caps = dict(duration_range={'min': 4, 'max': 15, 'step': 1},
                     resolutions=['480p', '720p', '1080p'], ratios=['16:9', '9:16', '1:1'],
-                    modes=['text', 'keyframes', 'omni_reference'], max_prompt_chars=7000,
-                    supports_cancel=False)
+                    modes=['text', 'keyframes', 'omni_reference'], max_reference_images=9,
+                    max_prompt_chars=7000, supports_cancel=False)
     elif protocol == 'dmc_h3' and model == 'MiniMax-H3':
         caps = dict(durations=list(range(1, 16)), resolutions=['768P'], ratios=RATIOS + ['adaptive'],
                     modes=['text', 'keyframes', 'omni_reference'], max_reference_images=9,

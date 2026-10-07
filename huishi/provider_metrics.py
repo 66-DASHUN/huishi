@@ -372,11 +372,16 @@ def provider_balance(provider: dict) -> dict:
     (``video_adapters/seedance_media.py``). Every other api_format reports
     ``unsupported`` rather than guessing a path.
     """
+    # 三种结果（unsupported / error / ok）返回**同一个形状**，恒定带 balance 与
+    # checked_at 键。否则调用方得先看 status 再决定能不能读 balance，漏判就是
+    # KeyError；前端也可能把「不支持」当成「没有这个字段」而显示成空白。
     if str(provider.get("api_format") or "") != "seedance_media":
         return {
             "status": "unsupported",
             "message": "该渠道类型不提供余额查询",
+            "balance": None,
             "provider_id": provider.get("id"),
+            "checked_at": _now(),
         }
     try:
         from huishi.video_adapters import seedance_media
@@ -386,7 +391,9 @@ def provider_balance(provider: dict) -> dict:
         return {
             "status": "error",
             "message": redact_sensitive_text(str(exc))[:300],
+            "balance": None,
             "provider_id": provider.get("id"),
+            "checked_at": _now(),
         }
     value = None
     if isinstance(payload, dict):

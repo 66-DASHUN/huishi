@@ -8,7 +8,7 @@ import json
 import re
 from urllib.parse import urlencode
 
-from flask import Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template, request, url_for
 from werkzeug.security import generate_password_hash
 
 from huishi.admin_permissions import ALL_ROLES, has_permission
@@ -1575,6 +1575,40 @@ def channel_health():
             (168, "最近 7 天"),
         ],
     )
+
+
+@bp.post("/channel-health/<int:provider_id>/balance")
+@permission_required("providers.view")
+def channel_balance(provider_id):
+    """按需查询单个渠道的上游账户余额。
+
+    刻意做成**点击触发**而不是页面加载时自动查询：余额要真发一次上游
+    HTTP 请求，按渠道数逐个查会让一个只读页面慢到几十秒，还会在管理员
+    每次打开页面时都消耗上游配额。同理也刻意不做并发批量入口。
+
+    只有 seedance_media 适配器实现了 balance()（``provider_metrics.
+    provider_balance``），其余渠道类型返回 unsupported —— 前端据此显示
+    "该渠道类型不提供余额查询"，而不是把"查不到"显示成"余额为零"。
+    """
+    from huishi.provider_metrics import provider_balance
+    from huishi.providers import get_provider
+
+    # 用 get_provider 而不是裸 SELECT：它会解密 api_key 并归一化 api_format，
+    # 而 provider_balance 正是靠 api_format 判断该渠道类型有没有余额接口。
+    provider = get_provider(provider_id)
+    if provider is None:
+        return jsonify({"ok": False, "error": "渠道不存在"}), 404
+
+    result = provider_balance(provider)
+    record_admin_audit(
+        int(g.user["id"]),
+        "provider.balance_probe",
+        "provider",
+        provider_id,
+        summary=f"查询渠道余额：{result.get('status')}",
+    )
+    get_db().commit()
+    return jsonify({"ok": True, "balance": result})
 
 
 @bp.post('/media-tasks/<int:task_id>/resume')
