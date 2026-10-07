@@ -9,12 +9,13 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 from huishi.media_capabilities import video_capabilities, validate_video_request
 from huishi.video_api import VideoTask, VideoTaskState, VideoApiError, _normalize_status
 from .common import (
-    request_json,
-    task_segment,
-    error_text,
-    require_idempotency,
     RetryableVideoError,
     VideoNotReadyError,
+    error_text,
+    is_response_format_error,
+    request_json,
+    require_idempotency,
+    task_segment,
 )
 
 
@@ -321,7 +322,12 @@ def models(provider):
         # even though the documented endpoint is enabled.  Keep real HTTP,
         # auth, and transport failures visible; only a successful non-JSON
         # response can safely use the documented static capability snapshot.
-        if str(exc) not in {'视频接口返回的不是 JSON', '视频接口返回格式不支持'}:
+        #
+        # 用标记判断而不是比较错误字符串：文案属于展示层，改一个字就会让这里的
+        # 降级静默失效（变成把"上游返回网页"当成硬故障抛出），且没有任何测试
+        # 会红。标记由 common.response_format_error 打上、并经 request_json
+        # 的重新包装透传过来。
+        if not is_response_format_error(exc):
             raise
         return _builtin_catalog()
     entries = _catalog_entries(result)

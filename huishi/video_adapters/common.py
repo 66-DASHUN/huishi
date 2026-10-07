@@ -9,6 +9,25 @@ class RetryableVideoError(VideoApiError):
     """The upstream state is uncertain; preserve the task and its reservation."""
 
 
+def response_format_error(message):
+    """构造一个"响应格式不符合预期"的错误，并打上标记。
+
+    这个标记存在的理由：``request_json`` 会把格式错误重新包装成
+    ``RetryableVideoError``（畸形响应仍可能代表上游已受理的任务），所以调用方
+    无法用异常类型判断"是不是格式问题"。而 seedance_media.models() 需要据此
+    决定是否降级到内置目录——它原先靠**比较错误字符串**判断，``common`` 里那
+    句话一改字就静默失效（降级不再发生，且没有任何测试会红）。
+    标记属性可以穿过重新包装，比字符串稳。
+    """
+    error = VideoApiError(message)
+    error.response_format_error = True
+    return error
+
+
+def is_response_format_error(error):
+    return bool(getattr(error, "response_format_error", False))
+
+
 class VideoNotReadyError(RetryableVideoError):
     """The accepted upstream task exists, but its result is not downloadable yet."""
 
@@ -56,14 +75,19 @@ def request_json(provider, method, path, *, payload=None, idempotency_key='', al
             try:
                 result = response.json()
             except ValueError as exc:
-                raise VideoApiError("视频接口返回的不是 JSON") from exc
+                raise response_format_error("视频接口返回的不是 JSON") from exc
             if not isinstance(result, (dict, list)):
-                raise VideoApiError("视频接口返回格式不支持")
+                raise response_format_error("视频接口返回格式不支持")
             return result
         return _json(response)
     except VideoApiError as exc:
         # A malformed create response might still represent an accepted task.
-        raise RetryableVideoError(str(exc)) from exc
+        # 重新包装时必须把"格式错误"标记带过去，否则调用方（seedance_media
+        # 的目录降级）无法区分"上游返回了网页"与"真实网络/鉴权故障"。
+        wrapped = RetryableVideoError(str(exc))
+        if is_response_format_error(exc):
+            wrapped.response_format_error = True
+        raise wrapped from exc
 
 
 def error_text(error, provider):
