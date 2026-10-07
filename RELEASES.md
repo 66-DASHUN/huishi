@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:log-handler-20261007` |
-| `worker` | `huishi-backend:log-handler-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:runtime-groups-20261007` |
+| `worker` | `huishi-backend:runtime-groups-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:token-fragment-20261005` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-log-handler-20261007`
+**当前回滚目标**：`huishi-backend:rollback-runtime-groups-20261007`
 
 ## 版本类型约定
 
@@ -39,7 +39,8 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `log-handler-20261007` | 2026-10-07 | 8 | `huishi-backend:log-handler-20261007` | 正式 | **在跑** | 日志 handler 不再随 create_app 堆积（消除日志重复与文件流泄漏）；兜底失败留下可诊断的异常类型 |
+| `runtime-groups-20261007` | 2026-10-07 | 8 | `huishi-backend:runtime-groups-20261007` | 正式 | **在跑** | 运行配置按分组折叠（需求 ③）：组标题行做成开关，默认收起；深链自动展开、窄屏不失效、脚本失败时内容仍可见 |
+| `log-handler-20261007` | 2026-10-07 | 8 | `huishi-backend:log-handler-20261007` | 正式 | 已被取代 | 日志 handler 不再随 create_app 堆积（消除日志重复与文件流泄漏）；兜底失败留下可诊断的异常类型 |
 | `unify-wording-20261007` | 2026-10-07 | 8 | `huishi-backend:unify-wording-20261007` | 正式 | 已被取代 | 统一三个视频适配器「不支持此模型」的措辞并带上模型名（需求 ②） |
 | `format-marker-20261007` | 2026-10-07 | 8 | `huishi-backend:format-marker-20261007` | 正式 | 已被取代 | 参考目录降级不再依赖错误文案（需求 ②）：改用异常标记判断，消除「改一句提示语就静默断开降级」的隐患 |
 | `unify-adapter-http-20261007` | 2026-10-07 | 8 | `huishi-backend:unify-adapter-http-20261007` | 正式 | 已被取代 | jiasuapi 复用统一 HTTP 层（需求 ②）：删除自建的 `_url`/`_headers`/`_request`，补上此前缺失的 `allow_redirects=False`，错误文案统一为 `HTTP <code>: <message>` |
@@ -70,17 +71,17 @@
 ## 目录完备度实况（由 `releases/_index.py` 生成）
 
 `/opt/huishi/releases/index.json` 会逐项报告每个 release 是否具备
-`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 27 个 release 中，
-只有 8 个同时具备三者**（2026-10-07 的 `capability-balance-20261007` 起才有标准骨架）：
+`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 28 个 release 中，
+只有 9 个同时具备三者**（2026-10-07 的 `capability-balance-20261007` 起才有标准骨架）：
 
 | 能力 | 具备的 release 数 |
 |---|---|
-| 有 Dockerfile | 22 / 27 |
-| 有 prepare.sh + deploy.sh | 10 / 27（`log-handler-20261007`、`unify-wording-20261007`、`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
-| 有 manifest | 20 / 27 |
-| **三者齐全** | **8 / 27**（`log-handler-20261007`、`unify-wording-20261007`、`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`subject-reference-20261004`） |
+| 有 Dockerfile | 23 / 28 |
+| 有 prepare.sh + deploy.sh | 11 / 28（`runtime-groups-20261007`、`log-handler-20261007`、`unify-wording-20261007`、`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
+| 有 manifest | 21 / 28 |
+| **三者齐全** | **9 / 28**（`runtime-groups-20261007`、`log-handler-20261007`、`unify-wording-20261007`、`format-marker-20261007`、`unify-adapter-http-20261007`、`paused-tasks-20261007`、`reference-hint-20261007`、`capability-balance-20261007`、`subject-reference-20261004`） |
 
-`capability-balance-20261007`（2026-10-07）是**首个按标准骨架产出**的 release，`reference-hint-20261007`、`paused-tasks-20261007`、`unify-adapter-http-20261007`、`format-marker-20261007`、`unify-wording-20261007`、`log-handler-20261007` 沿用同一骨架：
+`capability-balance-20261007`（2026-10-07）是**首个按标准骨架产出**的 release，`reference-hint-20261007`、`paused-tasks-20261007`、`unify-adapter-http-20261007`、`format-marker-20261007`、`unify-wording-20261007`、`log-handler-20261007`、`runtime-groups-20261007` 沿用同一骨架：
 Dockerfile×2 + prepare.sh + deploy.sh + compose.release/rollback + manifest.sha256 + payload。
 
 > 注：`subject-reference-20261004` 也判定为齐全，但它缺 `payload-worker` 与验证脚本，
