@@ -329,6 +329,23 @@ def normalize_provider_capabilities(value: object = None, provider_type: str = "
     return list(dict.fromkeys(result))
 
 
+def provider_model_priority(value: object) -> int | None:
+    """把条目级优先级规整成非负整数；非法或缺失一律返回 None。
+
+    返回 None 的含义是"该条目没有自己的优先级，请回落到渠道级"，而不是 0——
+    0 是合法值（最小优先级），混用会让"未设置"和"最优先"变得无法区分。
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if number < 0 or number > 10000:
+        return None
+    return number
+
+
 def normalize_provider_models(value: object = None, *, provider_type: str = "image", model: object = None) -> list[dict[str, Any]]:
     if isinstance(value, str):
         try:
@@ -363,6 +380,14 @@ def normalize_provider_models(value: object = None, *, provider_type: str = "ima
                     if key in ('capabilities','verification') and not isinstance(item[key],dict):
                         continue
                     normalized[key] = item[key]
+            # 条目级优先级必须活着穿过这里。它原先不在白名单里，于是
+            # ``save_model`` 写进库的值在**任何一次读取**时都被丢弃，
+            # 界面上"数值越小越优先，模型可以单独设置"因此完全空转：
+            # 配了也不生效，且保存后刷新就看不到。缺省时不写这个键，
+            # 让调用方回落到渠道级优先级。
+            entry_priority = provider_model_priority(item.get("priority"))
+            if entry_priority is not None:
+                normalized["priority"] = entry_priority
             result.append(normalized)
     model_id = str(model or "").strip()
     if model_id and not any(item["id"] == model_id for item in result):

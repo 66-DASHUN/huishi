@@ -129,10 +129,20 @@ def local_candidates(kind, model=None):
                 groups[group].append(view)
                 for entry in view['models']:
                     selected={**view,'model':entry['id'],'models':[entry],'api_format':entry.get('api_format') or provider['api_format']}
+                    # 选路按"条目优先、缺失回落渠道"排序。``selected`` 是从
+                    # ``view`` 展开的，直接带着渠道级 priority；这里显式覆盖，
+                    # 让同一个模型挂多渠道时能各自设置优先级。
+                    entry_priority=entry.get('priority')
+                    if entry_priority is not None:
+                        selected['priority']=entry_priority
                     by_model.setdefault((group,entry['id']),[]).append(selected)
         cached=(groups,by_model)
         if has_request_context():
             g._provider_route_index=cached
     groups,by_model=cached
     result=by_model.get((kind,str(model)),[]) if model and model!='*' else groups.get(kind,[])
+    # 同一模型的多个渠道按（优先级, 渠道 id）排序：视频侧取"第一个能通过校验的
+    # 候选"，此前依赖 SQL 的 id 顺序，条目级优先级再高也不会排到前面。
+    # 图片侧会自己按最小值分组轮询，这里的顺序对它是无害的稳定化。
+    result=sorted(result,key=lambda item:(int(item.get('priority') or 100),item.get('id') or 0))
     return deepcopy(result)
