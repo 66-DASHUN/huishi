@@ -60,7 +60,10 @@ for name, svc in sorted(data["services"].items()):
 PYHELPER
 python3 "$resolved_helper" < "$config_json" > "$resolved"
 for svc in "${services[@]}"; do
-  img=$(printf '%s\n' "$resolved" | grep "^${svc}=" | cut -d= -f2-)
+  # 读文件内容。上面的 python3 把结果重定向到了 $resolved 这个**文件**，
+  # 早先写成 printf 直接打印该变量，等于把路径当内容，grep 必然无匹配；
+  # set -e 加 pipefail 下会静默退出（退出码 1、无任何输出），极难排查。
+  img=$(grep "^${svc}=" "$resolved" | cut -d= -f2-)
   [ -n "$img" ] && [ "$img" != "None" ] || fail "服务 $svc 解析后没有镜像 tag（会回退到 :latest）"
   printf '[deploy] %s -> %s\n' "$svc" "$img"
 done

@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:channel-health-20261006` |
-| `worker` | `huishi-backend:channel-health-20261006`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:capability-balance-20261007` |
+| `worker` | `huishi-backend:capability-balance-20261007`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:token-fragment-20261005` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-channel-health-20261006`
+**当前回滚目标**：`huishi-backend:rollback-capability-balance-20261007`
 
 ## 版本类型约定
 
@@ -39,7 +39,8 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `channel-health-20261006` | 2026-10-06 | 7 | `huishi-backend:channel-health-20261006` | 正式 | **在跑** | 渠道健康度 + 队列生图修复 + gemini 回退。含 Dockerfile×2、prepare/deploy、payload |
+| `capability-balance-20261007` | 2026-10-07 | 9 | `huishi-backend:capability-balance-20261007` | 正式 | **在跑** | 余额按需查询接线 + 三处能力声明缺陷修复 + pg_dump 可读错误/脱敏 + systemd 遗留清理。**首个三者齐全的 release**（Dockerfile×2 + prepare/deploy + manifest.sha256 + payload） |
+| `channel-health-20261006` | 2026-10-06 | 7 | `huishi-backend:channel-health-20261006` | 正式 | 已被取代 | 渠道健康度 + 队列生图修复 + gemini 回退。含 Dockerfile×2、prepare/deploy、payload |
 | `payloads-20261005` | 2026-10-05 | 2 | `huishi-backend:payloads-20261005` | 正式 | 已被取代 | ⚠️ **目录不完整**：只有两个 compose，无 Dockerfile/脚本 |
 | `sanitize-secrets-20261005` | 2026-10-05 | 2 | `huishi-backend:sanitize-secrets-20261005` | 正式 | 已被取代 | ⚠️ 同上 |
 | `extract-image-sizes-20261005` | 2026-10-05 | 2 | `huishi-backend:extract-image-sizes-20261005` | 正式 | 已被取代 | ⚠️ 同上 |
@@ -63,18 +64,22 @@
 ## 目录完备度实况（由 `releases/_index.py` 生成）
 
 `/opt/huishi/releases/index.json` 会逐项报告每个 release 是否具备
-`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 20 个 release 中，
-同时具备三者的一个都没有**：
+`Dockerfile`、`prepare.sh`+`deploy.sh`、`manifest`。**当前 21 个 release 中，
+只有 2 个同时具备三者**（2026-10-07 的 `capability-balance-20261007` 起才有标准骨架）：
 
 | 能力 | 具备的 release 数 |
 |---|---|
-| 有 Dockerfile | 17 / 20 |
-| 有 prepare.sh + deploy.sh | 3 / 20（`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
-| 有 manifest | 14 / 20 |
-| **三者齐全** | **0 / 20** |
+| 有 Dockerfile | 16 / 21 |
+| 有 prepare.sh + deploy.sh | 4 / 21（`capability-balance-20261007`、`channel-health-20261006`、`subject-reference-20261004`、`video-pricing-fix-20261002`） |
+| 有 manifest | 14 / 21 |
+| **三者齐全** | **2 / 21**（`capability-balance-20261007`、`subject-reference-20261004`） |
 
-最接近的是 `subject-reference-20261004`（有 Dockerfile、脚本、manifest.json，
-但缺 `payload-worker` 与验证脚本）。
+`capability-balance-20261007`（2026-10-07）是**首个按标准骨架产出**的 release：
+Dockerfile×2 + prepare.sh + deploy.sh + compose.release/rollback + manifest.sha256 + payload。
+
+> 注：`subject-reference-20261004` 也判定为齐全，但它缺 `payload-worker` 与验证脚本，
+> 是"形式齐全"。`capability-balance-20261007` 的缺陷是 layer 语义——
+> 分层构建只覆盖不删除，所以它在 Dockerfile 里显式删掉了上一版残留的已删文件。
 
 > 生成方式：`python3 /opt/huishi/releases/_index.py` —— 每次发布后跑一次，
 > 它会重写 `index.json` 并列出不完整的 release。该脚本随本清单一起纳入版本控制
