@@ -302,9 +302,18 @@
       </div>
       <div class="parameter-popover video-workbench-popover subject-popover" id="subject-panel" data-popover-width="294" hidden>
         <span class="popover-title">选择已上传主体</span>
+        <!-- 创建入口固定在最上方且始终可见：此前它藏在空状态里，一旦有主体就被
+             隐藏（见 renderVideoSubjects 的 upload.hidden），用户想再加一个主体
+             反而找不到入口。现在它是一条常驻行，位置与 @ 菜单的常规交互一致。 -->
+        <button type="button" class="subject-create-button subject-create-row" data-add-subject-image>
+          <span class="subject-create-mark" aria-hidden="true">＋</span>
+          <span class="subject-create-copy">
+            <strong>创建主体</strong>
+            <small>上传图片后可在提示词中用 @ 引用</small>
+          </span>
+        </button>
         <div class="subject-empty-state" data-subject-empty>
           <p>请先上传主体图片</p>
-          <button type="button" class="subject-create-button" data-add-subject-image>上传主体图片</button>
         </div>
         <div class="subject-list" data-subject-list data-subject-file hidden></div>
       </div>

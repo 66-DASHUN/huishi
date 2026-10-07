@@ -1679,8 +1679,8 @@ function renderVideoSubjects(filterMention = true) {
   empty.hidden = subjects.length > 0;
   const emptyMessage = document.querySelector('[data-subject-empty] p');
   if (emptyMessage) emptyMessage.textContent = allSubjects.length ? '没有匹配的主体，请修改 @ 后的名称' : '请先上传主体图片';
-  const upload = document.querySelector('[data-add-subject-image]');
-  if (upload) upload.hidden = allSubjects.length > 0;
+  // 创建入口**不再**随主体数量隐藏：它是常驻行，用户随时能再加一个主体。
+  // （此前一旦已存在主体就把该按钮置为 hidden，用户反而找不到入口。）
   list.hidden = subjects.length === 0;
   list.replaceChildren(...subjects.map((subject) => {
     const button = document.createElement("button");
@@ -1957,7 +1957,7 @@ function _buildImageGrid(records, prompt, returnUrl = "/workspace") {
       ? `<video ${index === 0 ? 'id="current-video"' : ""} class="creation-media-video" src="${safePath}" controls preload="metadata" aria-label="${safePrompt}"></video>`
       : mediaType === "speech" || mediaType === "music" || mediaType === "audio"
         ? `<audio ${index === 0 ? 'id="current-audio"' : ""} class="creation-media-audio" src="${safePath}" controls preload="metadata" aria-label="${safePrompt}"></audio>`
-        : `<img ${index === 0 ? 'id="current-image"' : ""} src="${safePath}" alt="${safePrompt}" loading="lazy" draggable="true" data-reference-path="${safePath}">`;
+        : `<img ${index === 0 ? 'id="current-image"' : ""} src="${safePath}" alt="${safePrompt}" loading="lazy" draggable="true" data-reference-path="${safePath}" data-reference-name="${safePrompt}">`;
     return `
         <figure class="creation-image-wrap" data-media-type="${escapeAttribute(mediaType)}">
           <a class="creation-image-link" href="/assets/${item?.id}?from=workspace&next=${encodedReturnUrl}" data-detail-link aria-label="查看参数">
@@ -3544,6 +3544,18 @@ function bindCountStepper() {
   countInput.addEventListener("blur", normalizeCount);
 }
 
+// 把参考素材带进拖拽数据时，**同时带上友好名称**。
+// 只传路径的话，接收端只能从路径反推名字，于是界面上出现
+// ``huishi_AbC123.png`` / ``canvas_xxx.png`` 这类存储名——正是
+// "资产显示成内部 ID" 的成因。名称缺失时留空，由接收端兜底。
+function setReferenceDragData(dataTransfer, path, name) {
+  if (!dataTransfer || !path) return false;
+  dataTransfer.setData("text/huishi-reference-path", path);
+  if (name) dataTransfer.setData("text/huishi-reference-name", String(name));
+  dataTransfer.effectAllowed = "copy";
+  return true;
+}
+
 function bindReferenceDrop() {
   if (!studioShell) return;
   let dragDepth = 0;
@@ -3556,9 +3568,7 @@ function bindReferenceDrop() {
   document.addEventListener("dragstart", (event) => {
     const trigger = event.target.closest("[data-reference-path]");
     const path = trigger?.dataset.referencePath;
-    if (!path || !event.dataTransfer) return;
-    event.dataTransfer.setData("text/huishi-reference-path", path);
-    event.dataTransfer.effectAllowed = "copy";
+    if (!setReferenceDragData(event.dataTransfer, path, trigger?.dataset.referenceName)) return;
     addDragging();
   });
 
@@ -3583,7 +3593,8 @@ function bindReferenceDrop() {
     event.preventDefault();
     removeDragging();
     const path = event.dataTransfer?.getData("text/huishi-reference-path");
-    if (path && addReferencePath(path)) {
+    const name = event.dataTransfer?.getData("text/huishi-reference-name");
+    if (path && addReferencePath(path, name)) {
       setStatus("");
       return;
     }
@@ -3649,10 +3660,7 @@ function bindReferenceStack() {
   });
   referencePreview?.addEventListener("dragstart", (event) => {
     const tile = event.target.closest("[data-reference-path]");
-    const path = tile?.dataset.referencePath;
-    if (!path || !event.dataTransfer) return;
-    event.dataTransfer.setData("text/huishi-reference-path", path);
-    event.dataTransfer.effectAllowed = "copy";
+    setReferenceDragData(event.dataTransfer, tile?.dataset.referencePath, tile?.dataset.referenceName);
   });
   referenceStack?.addEventListener("click", (event) => {
     if (!referenceMaterials.length) return;

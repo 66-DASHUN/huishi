@@ -170,3 +170,35 @@ def test_workspace_consumes_home_prompt_draft_once():
     assert "sessionStorage.getItem(HOME_PROMPT_DRAFT_KEY)" in source
     assert "sessionStorage.removeItem(HOME_PROMPT_DRAFT_KEY)" in source
     assert 'composerPrompt.dispatchEvent(new Event("input", { bubbles: true }))' in source
+
+
+def test_subject_create_row_stays_visible_after_subjects_exist():
+    """「创建主体」必须是常驻行，不能一旦有主体就消失。
+
+    它原先只存在于空状态里，`renderVideoSubjects` 还会用
+    `upload.hidden = allSubjects.length > 0` 把它藏掉——结果是用户
+    已经有主体之后，最需要再加一个的时候反而找不到入口。
+    """
+    template = Path("templates/workspace.html").read_text(encoding="utf-8")
+    source = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    # 入口存在于面板内，且带自己的文案与图标
+    assert 'class="subject-create-button subject-create-row"' in template
+    assert 'data-add-subject-image' in template
+    assert "创建主体" in template
+    assert 'subject-create-mark' in template
+
+    # 旧行为（有主体即隐藏入口）必须已被移除
+    assert "upload.hidden = allSubjects.length > 0" not in source
+    assert "if (upload) upload.hidden" not in source
+
+
+def test_subject_create_row_is_styled_and_clickable():
+    """常驻行需要自己的样式；点击绑定仍然走 data-add-subject-image。"""
+    css = Path("static/css/site.css").read_text(encoding="utf-8")
+    source = Path("static/js/workspace.js").read_text(encoding="utf-8")
+
+    assert ".subject-create-row {" in css
+    assert ".subject-create-mark {" in css
+    assert ".subject-create-copy small {" in css
+    assert 'document.querySelector("[data-add-subject-image]")?.addEventListener("click"' in source

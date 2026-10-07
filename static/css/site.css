@@ -2155,6 +2155,48 @@ button, input, select { font: inherit; }
   border-color: var(--studio-accent);
   background: var(--studio-control-hover);
 }
+/* 常驻的「创建主体」行：左侧圆形 ＋，右侧两行文案。
+   它取代了原先藏在空状态里的按钮——那个按钮在有主体后会被隐藏，
+   用户想再加一个主体时反而找不到入口。 */
+.subject-create-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  margin-bottom: 4px;
+  text-align: left;
+}
+.subject-create-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px dashed var(--studio-border-strong, var(--studio-border));
+  border-radius: 6px;
+  color: var(--studio-accent);
+  font-size: 15px;
+  font-weight: 900;
+}
+.subject-create-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.subject-create-copy strong {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.subject-create-copy small {
+  overflow: hidden;
+  color: var(--studio-muted);
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .video-reference-materials {
   max-width: 100%;
   display: flex;
