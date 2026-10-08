@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import hashlib
 
 import pytest
@@ -72,8 +73,16 @@ def test_home_uses_two_scoped_chinese_font_families():
     assert "font-family: 'Noto Serif SC'" in fonts
     assert "font-weight: 300 900" in fonts
     assert "font-weight: 400 900" in fonts
-    # unicode-range 决定浏览器只下载命中的分片；丢掉它会一次拉取全部 202 个文件
-    assert fonts.count("unicode-range") == fonts.count("@font-face")
+    # unicode-range 决定浏览器只下载命中的分片；丢掉它会一次拉取全部 202 个文件。
+    # 按真正的块数来数，不用字符串出现次数——注释里提一句就会把后者凑对。
+    blocks = re.findall(r"@font-face\s*\{[^}]*\}", fonts)
+    urls = re.findall(r"url\(\.\./fonts/([^)]+)\)", fonts)
+    assert len(blocks) == 202
+    assert len(urls) == 202
+    assert len(set(urls)) == 202
+    for block in blocks:
+        assert "unicode-range" in block
+        assert block.count("url(") == 1
     assert 'font-family: "Noto Sans SC"' in styles
     assert 'font-family: "Noto Serif SC"' in styles
     for legacy_font in ("Instrument Serif", "Songti SC", "Barlow"):
