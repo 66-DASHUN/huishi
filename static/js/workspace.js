@@ -3108,7 +3108,22 @@ async function submitGeneration(event) {
   const submittedRatio = ratioInput?.value || "16:9";
   const [submittedWidth, submittedHeight] = normalizedResolution.split("x", 2);
   formData.delete("reference_paths");
-  getReferencePathMaterials().forEach((item) => formData.append("reference_paths", item.path));
+  const submittedPathMaterials = getReferencePathMaterials();
+  submittedPathMaterials.forEach((item) => formData.append("reference_paths", item.path));
+  // 参考图的显示名，顺序必须与后端拼装 reference_images 的顺序一致：
+  // 先是已有的 path 素材，再是新上传的文件（见 routes_workspace 的
+  // [*existing_reference_images, *uploaded_reference_images]）。
+  // 这两个名字前端能给出、后端给不出——落盘时 secure_filename 会把中文
+  // 整段吃掉（"天鹤司命分镜42.png" → "42.png"），想反查也查不回来。
+  // 提示词里的 @ 引用要靠它才能变成上游看得懂的编号说明。
+  if (isImageGeneration) {
+    const submittedImageFiles = getReferenceFileMaterials("image");
+    const referenceNames = [
+      ...submittedPathMaterials.map((item) => materialDisplayName(item)),
+      ...submittedImageFiles.map((item) => item.file?.name || materialDisplayName(item)),
+    ];
+    if (referenceNames.length) formData.set("reference_names", JSON.stringify(referenceNames));
+  }
   formData.set("mode", isImageGeneration ? (modeInput?.value || "text") : "text");
   formData.set("media_type", isImageGeneration ? "" : selectedMediaType);
   let videoRequestIdentity = "";

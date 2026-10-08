@@ -133,6 +133,10 @@ def run_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | Non
             from huishi import routes_workspace
 
             reference_images = routes_workspace.load_reference_images(task.get("reference_paths") or [])
+            # 参考图显示名（前端按提交顺序给出）。图片路径被打上 @ 引用时，
+            # 靠它把"第几张是哪个名字"讲给上游听——见 image_api.build_reference_preamble。
+            _task_meta = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+            reference_names = [str(n) for n in (_task_meta.get("reference_names") or []) if str(n or "").strip()]
 
             bypass_billing = bool(task.get("bypass_billing"))
             user_provider = None
@@ -179,6 +183,7 @@ def run_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | Non
                             quality=str(task["quality"]),
                             output_format=str(task["output_format"]),
                             reference_images=reference_images,
+                            reference_names=reference_names,
                             api_key=user_provider["api_key"],
                             base_url=user_provider["base_url"],
                             model=str(task.get("model") or user_provider["model"]),
@@ -200,6 +205,7 @@ def run_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | Non
                         quality=str(task["quality"]),
                         output_format=str(task["output_format"]),
                         reference_images=reference_images,
+                        reference_names=reference_names,
                         model=str(task.get("model") or ""),
                     )
             generated_output_paths = list(result.get("image_paths") or ([result["image_path"]] if result.get("image_path") else []))

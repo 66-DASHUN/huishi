@@ -1,13 +1,14 @@
 {
   "private": true,
   "scripts": {
-    "test": "node tools/run_python.mjs -m pytest -q",
+    "test": "node tools/run_python.mjs -m pytest -q && npm run check:js",
     "check:encoding": "node tools/run_python.mjs tools/check_encoding.py",
     "check:assets": "node tools/run_python.mjs tools/check_asset_budget.py",
     "verify:home": "npm run check:encoding && npm run build:home && npm run check:assets",
     "build:home": "npm run build:home:js && npm run build:home:css",
     "build:home:js": "node tools/build_home_js.mjs",
-    "build:home:css": "tailwindcss -c tailwind.home.config.js -i static/css/home-tailwind.input.css -o static/css/home-tailwind.css --minify"
+    "build:home:css": "tailwindcss -c tailwind.home.config.js -i static/css/home-tailwind.input.css -o static/css/home-tailwind.css --minify",
+    "check:js": "node tests/check_settings_models.cjs && node tests/check_workspace_mention.cjs"
   },
   "dependencies": {
     "react": "18.3.1",

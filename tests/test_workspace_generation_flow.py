@@ -160,9 +160,9 @@ def test_reference_generation_uses_saved_reference_path(app, monkeypatch):
         upload_dir = app.config["OUTPUT_DIR"]
         upload_dir.mkdir(parents=True, exist_ok=True)
         (upload_dir / "ref.png").write_bytes(
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-            b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
-            b"\x90wS\xde"
+            # 用 fromhex 而不是字节字面量：后者经 shell 转义会被写成真实字节
+            # （含空字节），让文件无法被 Python 解析。
+            bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de")
         )
         get_db().execute(
             """
@@ -1408,3 +1408,67 @@ def test_canvas_shell_uses_full_stage_layout():
     assert ".canvas-embed-page .canvas-embed-frame .canvas-frame {" not in css or ".canvas-embed-page .canvas-embed-frame iframe" in css
     assert ".canvas-workspace-topbar" not in css
     assert ".canvas-page .canvas-shell" not in css
+
+
+
+def test_generate_persists_reference_display_names_for_mention_rendering(app, monkeypatch):
+    """前端给出的参考图显示名要落到任务元数据里。
+
+    提示词里的 @ 引用要靠这批名字才能翻成上游看得懂的编号说明；而名字只有
+    前端知道——落盘名会被 secure_filename 改写（中文整段丢失），后端反查不回来。
+    """
+    import json
+
+    def fake_failover(**kwargs):
+        return {
+            "image_path": "/static/uploads/out.png",
+            "image_paths": ["/static/uploads/out.png"],
+            "actual_size": "2560x1440",
+            "model_source": "fake",
+            "elapsed_seconds": 0.1,
+        }
+
+    with app.app_context():
+        make_image_provider()
+        user_id = create_user(points=50)
+        upload_dir = app.config["OUTPUT_DIR"]
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        (upload_dir / "ref.png").write_bytes(
+            bytes.fromhex(
+                "89504e470d0a1a0a0000000d49484452"
+                "00000001000000010802000000907753de"
+            )
+        )
+
+    monkeypatch.setattr(
+        "huishi.generation_queue.generate_image_with_failover",
+        fake_failover,
+    )
+
+    names = ["产品图.png"]
+    with app.test_client() as client:
+        login(client, user_id)
+        response = client.post(
+            "/generate",
+            data={
+                "prompt": "参考@产品图.png 换个背景",
+                "model": "gpt-image-2",
+                "ratio": "16:9",
+                "resolution": "2K",
+                "quality": "auto",
+                "output_format": "png",
+                "count": "1",
+                "reference_paths": "/static/uploads/ref.png",
+                "reference_names": json.dumps(names, ensure_ascii=False),
+            },
+            headers={"X-Requested-With": "fetch", "Accept": "application/json"},
+        )
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+
+    with app.app_context():
+        row = get_db().execute(
+            "SELECT metadata_json FROM generation_tasks ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        metadata = json.loads(row["metadata_json"] or "{}")
+        assert metadata.get("reference_names") == names

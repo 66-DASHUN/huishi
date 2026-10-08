@@ -673,6 +673,58 @@ def placeholder_image(*, prompt: str, ratio: str, resolution: str) -> dict[str, 
     }
 
 
+NEWLINE = chr(10)
+
+_REFERENCE_MENTION_PATTERN = re.compile(r"@([^\s@]+)")
+
+
+def reference_mention_labels(prompt: str) -> list[str]:
+    """提取提示词里被 @ 引用的素材名（去重、保持出现顺序）。"""
+    labels: list[str] = []
+    for match in _REFERENCE_MENTION_PATTERN.finditer(prompt or ""):
+        name = match.group(1).strip()
+        if name and name not in labels:
+            labels.append(name)
+    return labels
+
+
+def build_reference_preamble(prompt: str, reference_names: object = None) -> str:
+    """把提示词里的 @ 引用翻译成上游能理解的编号说明。
+
+    为什么要这一步：前端插入的 ``@文件名`` 会随提示词**原样**发给上游，
+    而参考图是以"若干张图片"的形式附带的。上游拿到的是一句
+    "参考@abc.png" 加 N 张图，**没有任何编号可以把名字和图片对应起来**，
+    于是这个名字对出图毫无作用。
+
+    ``reference_names`` 必须是**按图片真实提交顺序**排列的名称列表，由调用方
+    给出（见 routes_workspace 里的拼装）。不能按提示词里 @ 的出现顺序编号：
+    提交顺序是"已有素材在前、新上传文件在后"，而 @ 的出现顺序取决于用户
+    怎么打字，两者不一致时编号就是错的——错误的编号比没有更糟。
+
+    只在提示词确实出现 @ 且确实带了参考图时补前缀；提示词正文一字不改
+    （正文属于用户输入，存进任务记录的也该是用户原本写的那句）。
+    """
+    text = str(prompt or "")
+    referenced = reference_mention_labels(text)
+    names = [str(name) for name in (reference_names or []) if str(name).strip()]
+    if not referenced or not names:
+        return text
+    # 列出**全部**参考图的位置与名称，而不是只列被 @ 到的那些。
+    # 原因：落盘名会被 secure_filename 改写（中文名会被整段吃掉，
+    # "天鹤司命分镜42.png" → "42.png"），按名字反查位置并不可靠；
+    # 而位置本身是确定的，上游需要的也正是"第几张是哪个名字"。
+    listed = "、".join(
+        f"第{index + 1}张={name}" for index, name in enumerate(names)
+    )
+    total = len(names)
+    header = (
+        f"参考图片共 {total} 张，按提交顺序编号。"
+        f"提示词中的 @ 引用对应关系：{listed}。"
+        "请按这些编号理解提示词中的图片引用。"
+    )
+    return header + NEWLINE + NEWLINE + text
+
+
 def generate_image(
     *,
     prompt: str,
@@ -686,6 +738,7 @@ def generate_image(
     quality: str = "auto",
     output_format: str = "png",
     reference_images: list[FileStorage] | None = None,
+    reference_names: list[str] | None = None,
     api_format: str = "openai",
     proxy_url: str = "",
 ) -> dict[str, object]:
@@ -703,6 +756,9 @@ def generate_image(
         raise ConfigurationError("缺少接口地址，请先到设置页保存 Base URL，或在服务器环境变量 BASE_URL 中配置")
 
     size = resolve_size(ratio, resolution)
+    # 送上游之前把 @ 引用翻成编号说明。放在这里是因为 generate_image 是
+    # 唯一咽喉点：队列、工作台、作品重生成、测试连接四条路径全经过它。
+    prompt = build_reference_preamble(prompt, reference_names)
     normalized_api_format = str(api_format or "openai").strip().lower()
     if normalized_api_format not in {"openai", "gemini", "banana", "grok", "jiasuapi"}:
         raise ConfigurationError("不支持的生图调用协议")

@@ -2171,12 +2171,15 @@ def generate():
         if mode == "reference":
             saved_reference_paths = save_reference_images(uploaded_reference_images)
             reference_paths = [*existing_reference_paths, *saved_reference_paths]
+            # 显示名按同一顺序（已有素材在前、新上传在后），稍后交给 worker。
+            reference_names = parse_reference_names_form_values()
             reference_images = load_reference_images(reference_paths)
             if not reference_images:
                 cleanup_local_uploads(saved_reference_paths)
                 return generation_error("参考图源文件不存在，请回到工作台重新上传后再生成", 400)
         else:
             reference_paths = []
+            reference_names = []
         with immediate_transaction():
             lock_user_for_update(g.user["id"])
             if not _bypass_billing:
@@ -2199,6 +2202,7 @@ def generate():
                 model=billing_model,
                 reference_paths=reference_paths,
                 bypass_billing=_bypass_billing,
+                metadata=_image_reference_metadata(reference_names),
             )
         remember_workspace_dialogue(dialogue_id)
         enqueue_generation_task(current_app._get_current_object(), task_id, saved_reference_paths)
@@ -2442,6 +2446,32 @@ def parse_reference_path_form_values() -> list[str]:
             if path and path.startswith("/static/uploads/") and path not in paths:
                 paths.append(path)
     return paths
+
+
+def _image_reference_metadata(reference_names: list[str]) -> dict | None:
+    """把参考图显示名塞进任务元数据，供 worker 拼装编号说明。
+
+    没有名字时返回 None——不给任务写一个空键，保持既有任务记录的形状不变。
+    """
+    names = [str(name).strip() for name in (reference_names or []) if str(name or "").strip()]
+    return {"reference_names": names} if names else None
+
+
+def parse_reference_names_form_values() -> list[str]:
+    """读取前端随表单提交的参考图显示名（顺序与 reference_images 一致）。
+
+    缺省或格式不对时返回空列表——编号说明是可选的增强，不该让生成失败。
+    """
+    raw = request.form.get("reference_names", "")
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item).strip() for item in parsed if str(item or "").strip()]
 
 
 def is_allowed_reference_image(file_storage) -> bool:
