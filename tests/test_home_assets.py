@@ -27,24 +27,53 @@ def test_home_does_not_load_global_site_css(client):
     assert "css/site.css" not in body
 
 
-def test_home_uses_one_nonblocking_font_stylesheet():
+def test_fonts_are_self_hosted_and_no_page_reaches_a_font_cdn():
+    """字体必须自托管，且任何页面都不得再指向外部字体 CDN。
+
+    这条钉的是一个代价很大的回归：模板里只要出现 fonts.googleapis.com 的链接，
+    Cloudflare 的 Fonts 功能就会把整份 Google CSS 展开内联进**每一个** HTML
+    响应。实测那是 505 条 @font-face、约 46 万字节，占页面 gzip 后体积的九成
+    以上，而且内联内容无法被浏览器缓存——每次导航都要重下，包括进入画布时
+    huishi 这层壳也要白付一遍。外链的 site.css 反而不受影响。
+
+    所以这里同时钉住三件事：base 引入站内 fonts.css、home 不再覆盖它、
+    全站模板与静态资源里搜不到 Google 字体域名。
+    """
     base = Path("templates/base.html").read_text(encoding="utf-8")
     home = Path("templates/home.html").read_text(encoding="utf-8")
 
     assert "{% block font_styles %}" in base
-    assert "{% block font_styles %}" in home
-    assert home.count("fonts.googleapis.com/css2") == 1
-    assert 'media="print"' in home
-    assert "onload=\"this.media='all'\"" in home
+    assert "css/fonts.css" in base
+    # home 继承 base 的自托管版本：fonts.css 已含 Serif，无需单独请求
+    assert "{% block font_styles %}" not in home
+
+    # 只在真正会联网的地方找：href/src 与 @import。写在注释里提及域名不算数，
+    # 否则文档一改就误伤。
+    for path in list(Path("templates").rglob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        lowered = text.lower()
+        assert "fonts.googleapis.com" not in lowered.replace("外部字体 cdn", ""), path
+        assert "href=\"https://fonts." not in lowered, path
+        assert "src=\"https://fonts." not in lowered, path
 
 
 def test_home_uses_two_scoped_chinese_font_families():
-    home = Path("templates/home.html").read_text(encoding="utf-8")
-    styles = Path("static/css/home-tailwind.input.css").read_text(encoding="utf-8")
+    """两个中文字族都由自托管 CSS 提供，且写成可变字体的权重范围。
 
-    assert "Noto+Sans+SC" in home
-    assert "Noto+Serif+SC" in home
-    assert "Instrument+Serif" not in home
+    权重必须是范围形式（如 ``300 900``）。这批 woff2 是可变字体，一个文件覆盖
+    整条 wght 轴；写成单值浏览器不会去用那条轴，渲染会退回单一字重——而这不是
+    报错，是悄悄变丑，所以值得钉住。
+    """
+    styles = Path("static/css/home-tailwind.input.css").read_text(encoding="utf-8")
+    fonts = Path("static/css/fonts.css").read_text(encoding="utf-8")
+
+    assert "Instrument+Serif" not in styles
+    assert "font-family: 'Noto Sans SC'" in fonts
+    assert "font-family: 'Noto Serif SC'" in fonts
+    assert "font-weight: 300 900" in fonts
+    assert "font-weight: 400 900" in fonts
+    # unicode-range 决定浏览器只下载命中的分片；丢掉它会一次拉取全部 202 个文件
+    assert fonts.count("unicode-range") == fonts.count("@font-face")
     assert 'font-family: "Noto Sans SC"' in styles
     assert 'font-family: "Noto Serif SC"' in styles
     for legacy_font in ("Instrument Serif", "Songti SC", "Barlow"):

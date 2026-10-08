@@ -17,11 +17,21 @@ def test_base_exposes_theme_before_styles_render():
 
 
 def test_base_loads_only_the_shared_modern_sans_font():
-    base = read("templates/base.html")
+    """base 只引一份共享字体样式表，且不含遗留字族。
 
-    assert "Noto+Sans+SC" in base
-    for legacy_font in ("Instrument+Serif", "Barlow", "Inter"):
+    字体已从外部 CDN 改为站内自托管（见 static/css/fonts.css）：这么改是因为
+    只要模板里留着外部字体链接，Cloudflare 的 Fonts 功能就会把整份 CSS 内联进
+    每个 HTML 响应，而那些字节无法被缓存。所以这里断言的是"引了自托管那份"，
+    而不是原来的 URL 形态——契约没变，只是字体换了来源。
+    """
+    base = read("templates/base.html")
+    fonts = read("static/css/fonts.css")
+
+    assert "css/fonts.css" in base
+    assert "font-family: 'Noto Sans SC'" in fonts
+    for legacy_font in ("Instrument Serif", "Barlow", "Inter"):
         assert legacy_font not in base
+        assert legacy_font not in fonts
 
 
 def test_theme_script_supports_light_and_dark_toggle():

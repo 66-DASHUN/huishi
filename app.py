@@ -567,8 +567,8 @@ def production_content_security_policy(canvas_app_url: object = "") -> str:
         frame_sources.append(canvas_origin)
     return (
         "default-src 'self'; img-src 'self' data: blob:; media-src 'self' https: data: blob:; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
         "connect-src 'self' https: wss:; "
         f"frame-src {' '.join(frame_sources)}; frame-ancestors 'self'; form-action 'self'"
     )

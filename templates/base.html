@@ -35,9 +35,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/workspace-task-repair.css', v='20260922-subject-picker-1') }}">
     {% endblock %}
     {% block font_styles %}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    {# 字体自托管。原先直连外部字体 CDN，Cloudflare 的 Fonts 功能会把那份 CSS
+       展开内联进每个 HTML 响应（实测 505 条 @font-face、约 46 万字节，占页面
+       gzip 后体积的九成以上），而内联内容无法缓存，于是每次导航都要重下。
+       改为站内文件后受 max-age=31536000 保护，只在首次付费。 #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts.css', v='20261008-selfhosted-1') }}">
     {% endblock %}
     {% block head %}{% endblock %}
   </head>
