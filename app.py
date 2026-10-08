@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone, timedelta
 import logging
+import mimetypes
 import os
 import re
 import secrets
@@ -164,8 +165,31 @@ def configure_daily_file_logging(*, log_dir: Path | str | None = None, today=dat
     return handler
 
 
+def register_font_mime_types() -> None:
+    """确保 .woff2/.woff 以正确的 Content-Type 送出。
+
+    为什么需要：python:3.12-slim 里没有 /etc/mime.types，Python 的 mimetypes
+    因此不认识 woff2，Flask 就把它当 application/octet-stream 发出去。
+
+    说清楚风险边界：实测主流浏览器不会因为字体是 octet-stream 就拒绝加载——
+    nosniff 的 MIME 强制针对脚本与样式表，字体主要按实际字节（wOF2 魔术头）
+    解析。所以这不是线上故障，而是"响应头说了谎"：内容类型错误会让严格的
+    客户端、某些代理与 CDN 的缓存策略、以及未来的浏览器行为变化都缺少依据。
+    类型正确是应当的，代价也只是两行注册。
+
+    自托管字体之前由 Cloudflare 边缘提供、自带正确类型，所以这个坑是随
+    「字体搬到站内」一起进来的。
+    """
+    for suffix, content_type in (
+        (".woff2", "font/woff2"),
+        (".woff", "font/woff"),
+    ):
+        mimetypes.add_type(content_type, suffix, strict=True)
+
+
 def create_app(*, testing: bool = False) -> Flask:
     app = Flask(__name__)
+    register_font_mime_types()
     app.jinja_env.filters["model_label"] = provider_store.model_label
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     app.config.from_object(Config)

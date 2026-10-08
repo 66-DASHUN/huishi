@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
+import os
 import re
 import hashlib
 
@@ -88,6 +91,47 @@ def test_home_uses_two_scoped_chinese_font_families():
     for legacy_font in ("Instrument Serif", "Songti SC", "Barlow"):
         assert legacy_font not in styles
 
+
+def test_woff2_is_served_with_a_font_content_type():
+    # 字体必须以 font/woff2 送出，不能是 application/octet-stream。
+    #
+    # python:3.12-slim 里没有 /etc/mime.types，mimetypes 因此不认识 woff2，
+    # Flask 会退化成 application/octet-stream。
+    #
+    # 风险边界要说清：实测主流浏览器不会因此拒绝加载字体（nosniff 的 MIME
+    # 强制针对脚本与样式表，字体按实际字节解析）。所以这不是线上故障，而是
+    # 「响应头说了谎」——严格的客户端、代理与缓存层都失去依据。类型正确是
+    # 应当的，代价也只是两行注册。
+    #
+    # 为什么必须用子进程：mimetypes.add_type 改的是模块级全局表，一旦在测试
+    # 进程里调用过就永久生效，会把「create_app 到底有没有接线」掩盖掉，
+    # 那样的测试永远是绿的。子进程从零开始，才反映首次加载的真实情况。
+    probe = chr(10).join([
+        "import mimetypes",
+        "print(mimetypes.guess_type('x.woff2')[0])",
+        "from app import create_app",
+        "app = create_app()",
+        "print(mimetypes.guess_type('x.woff2')[0])",
+        "c = app.test_client()",
+        "import os as _os",
+        "name = sorted(_os.listdir('static/fonts'))[0]",
+        "r = c.get('/static/fonts/' + name, base_url='https://localhost')",
+        "print(r.headers.get('Content-Type', ''))",
+        "assert r.get_data()[:4] == b'wOF2'",
+    ])
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True, text=True, timeout=180,
+        env={**os.environ, "HUISHI_DATABASE": os.environ.get("HUISHI_DATABASE", "/tmp/t_mime.sqlite3"), "HUISHI_ENV": "test"},
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    reported = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    # 第一行是未注册前（应为 None），第二行是 create_app 之后
+    assert reported[0] == "None", result.stdout[-2000:]
+    assert reported[1] == "font/woff2", result.stdout[-2000:]
+    header = reported[2]
+    assert "woff2" in header, result.stdout[-2000:]
+    assert "octet-stream" not in header, result.stdout[-2000:]
 
 def test_home_uses_local_sea_media_contract():
     source = Path("static/js/home.js").read_text(encoding="utf-8")
