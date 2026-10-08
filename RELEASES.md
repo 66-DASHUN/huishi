@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:mention-preamble-20261008` |
-| `worker` | `huishi-backend:mention-preamble-20261008`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:font-mime-20261008` |
+| `worker` | `huishi-backend:font-mime-20261008`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:token-fragment-20261005` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-mention-preamble-20261008`
+**当前回滚目标**：`huishi-backend:rollback-font-mime-20261008`
 
 ## 版本类型约定
 
@@ -39,7 +39,9 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `mention-preamble-20261008` | 2026-10-08 | 8 | `huishi-backend:mention-preamble-20261008` | 正式 | **在跑** | 图片模式的 @ 引用**真正生效**：此前 `@文件名` 只是原样送上游的一段纯文本，上游既不知道它指向第几张图、也没有位置对应关系，等于装饰。现在在唯一的出图咽喉点（队列/工作台/作品重生成/测试连接四条路径共用）插入编号前言：「参考图片共 N 张，按提交顺序编号 …… 第1张=产品主图.png」，顺带把 `secure_filename` 吃掉中文名（`天鹤司命分镜42.png`→`42.png`）导致按名反查位置不可靠的问题一并绕开——编号依据是**真实提交顺序**而非 @ 的出现顺序。已用补丁 OpenAI 客户端的方式抓到真实上游 kwargs，确认前言随请求发出 |
+| `font-mime-20261008` | 2026-10-08 | 8 | `huishi-backend:font-mime-20261008` | 正式 | **在跑** | 给 .woff2/.woff 注册正确的 Content-Type。python:3.12-slim 里没有 /etc/mime.types，mimetypes 不认识 woff2，Flask 把字体当 `application/octet-stream` 送出——这是随「字体搬到站内」一起进来的，此前字体由 Cloudflare 边缘提供、类型天然正确。风险边界如实说：主流浏览器不会因此拒绝加载（nosniff 的 MIME 强制针对脚本与样式表），所以不是线上故障，而是响应头说了谎。测试用**子进程**验证，因为 `mimetypes.add_type` 改的是模块级全局表，在测试进程里调一次就永久生效——我最初那版测试去掉修复后依然全绿，等于没测；改为子进程并做过反证后才可信 |
+| `fonts-canvas-perf-20261008` | 2026-10-08 | 8 | `huishi-backend:fonts-canvas-perf-20261008` | 正式 | 已被取代 | 字体自托管，消掉 Cloudflare 往每个 HTML 里内联的 46 万字节。实测注入是 505 条 @font-face、461,774 字节（raw），`/workspace` 因此从 464,938 掉到 **3,214 字节**，每次导航的传输量从 36,475 降到 **1,387**（br）。做法：202 个 woff2 子集放 `static/fonts/`，权重写成范围形式（这批是可变字体，一个文件覆盖整条 wght 轴，写成单值会静默退回单字重），保留 unicode-range 让浏览器只下命中的 3-8 片。另含画布移除仅为 `dark` 一个布尔引入的 pro-components（首屏 gzip −31,258，−5.9%）。**注意**：字体进 git 共 10,531,532 字节 |
+| `mention-preamble-20261008` | 2026-10-08 | 8 | `huishi-backend:mention-preamble-20261008` | 正式 | 已被取代 | 图片模式的 @ 引用**真正生效**：此前 `@文件名` 只是原样送上游的一段纯文本，上游既不知道它指向第几张图、也没有位置对应关系，等于装饰。现在在唯一的出图咽喉点（队列/工作台/作品重生成/测试连接四条路径共用）插入编号前言：「参考图片共 N 张，按提交顺序编号 …… 第1张=产品主图.png」，顺带把 `secure_filename` 吃掉中文名（`天鹤司命分镜42.png`→`42.png`）导致按名反查位置不可靠的问题一并绕开——编号依据是**真实提交顺序**而非 @ 的出现顺序。已用补丁 OpenAI 客户端的方式抓到真实上游 kwargs，确认前言随请求发出 |
 | `image-mode-mention-20261008` | 2026-10-08 | 8 | `huishi-backend:image-mode-mention-20261008` | 正式 | 已被取代 | 图片模式也支持 @ 引用参考图：此前 @ 只在视频模式可用（函数开头就按媒体类型早退），而参考图恰是图片模式最常用的输入。改动含候选入口与媒体解耦、锚点按模式回落、点击不误写视频状态、措辞分模式、切换类型重新同步。附 `tests/check_workspace_mention.cjs`（node，8 组）用 DOM 桩执行真实分支 |
 | `subject-create-row-20261008` | 2026-10-08 | 8 | `huishi-backend:subject-create-row-20261008` | 正式 | 已被取代 | 用户页 UI：①「创建主体」改为常驻行，此前它藏在空状态里、一旦有主体就被隐藏，想再加一个时入口反而消失；②拖拽参考素材同时携带友好名（结果图用提示词、素材卡用显示名），修掉界面出现 `huishi_xxx.png` / `canvas_xxx.png` 这类存储名的问题 |
 | `entry-priority-20261007` | 2026-10-07 | 8 | `huishi-backend:entry-priority-20261007` | 正式 | 已被取代 | 模型条目的优先级真正生效：`priority` 此前不在字段白名单里，保存后**任何一次读取都会丢弃**，导致「模型可单独设置优先级」完全空转。补齐白名单 + 候选按（条目优先、缺失回落渠道）排序。现有条目值均为 100 与渠道级相同，故行为不变、零迁移 |
