@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { ProConfigProvider } from "@ant-design/pro-components";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
@@ -42,15 +41,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
         return () => media.removeEventListener("change", syncResolvedTheme);
     }, [preference, setPreference]);
 
+    // ProConfigProvider 已移除：它的唯一作用是给 pro-components 自己的组件
+    // 传 dark。本项目一个 pro 组件都没用，却因此把整个 pro-components 拖进
+    // 首屏（9MB 包，连带 lodash-es / rc-field-form / dnd-kit / emotion 等）。
+    // 暗色主题由下面 ConfigProvider 的 getAntThemeConfig 完整负责
+    // （darkAlgorithm + 每组件 dark token），不依赖 pro 的上下文。
     return (
         <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark)}>
-            <ProConfigProvider dark={dark}>
-                <App>
-                    <QueryClientProvider client={queryClient}>
-                        <ClientRootInit>{children}</ClientRootInit>
-                    </QueryClientProvider>
-                </App>
-            </ProConfigProvider>
+            <App>
+                <QueryClientProvider client={queryClient}>
+                    <ClientRootInit>{children}</ClientRootInit>
+                </QueryClientProvider>
+            </App>
         </ConfigProvider>
     );
 }
