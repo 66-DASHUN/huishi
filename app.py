@@ -212,6 +212,14 @@ def create_app(*, testing: bool = False) -> Flask:
     app.config["BACKUP_KEEP"] = int(os.environ.get("HUISHI_BACKUP_KEEP", app.config["BACKUP_KEEP"]))
     app.config["CANVAS_APP_URL"] = os.environ.get("HUISHI_CANVAS_APP_URL", app.config["CANVAS_APP_URL"])
     app.config["REDIS_URL"] = os.environ.get("HUISHI_REDIS_URL", "")
+    # 并发上限在这里算好写回 config（而不是用 @property 挂在 Config 上）：
+    # from_object 只复制类属性，property 取到的是描述符本身。
+    app.config["IMAGE_CONCURRENCY"] = max(1, int(app.config["GENERATION_IMAGE_PROCESSES"])) * max(
+        1, int(app.config["GENERATION_IMAGE_THREADS"])
+    )
+    app.config["VIDEO_CONCURRENCY"] = max(1, int(app.config["GENERATION_VIDEO_PROCESSES"])) * max(
+        1, int(app.config["GENERATION_VIDEO_THREADS"])
+    )
     app.config["REQUIRE_REDIS_LIMITS"] = os.environ.get(
         "HUISHI_REQUIRE_REDIS_LIMITS",
         "1" if is_production_environment() else "0",

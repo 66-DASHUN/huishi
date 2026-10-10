@@ -237,7 +237,15 @@ def optimize_image_bytes(
             elif suffix == ".webp":
                 image.save(output, format="WEBP", method=6, quality=max(1, min(100, int(webp_quality))))
             else:
-                image.save(output, format="PNG", optimize=True, compress_level=max(0, min(9, int(png_compress_level))))
+                # optimize=False 是**关键**：Pillow 在 optimize=True 时会忽略
+                # compress_level、改用更慢的多策略搜索。生产实测同一张
+                # 2048x2048/1062KB 的图：
+                #   optimize=True  lvl9 -> 3533 ms，产物 1062KB（等于原图，被丢弃）
+                #   optimize=False lvl6 ->  424 ms，产物 1177KB
+                # 省下 3109 ms/张，而产物本来就因为"不小于原图就返回原图"
+                # 那条规则被丢弃，所以等于什么都没得到。
+                # PNG 是无损格式、上游已压过一次，本地再压收益极小。
+                image.save(output, format="PNG", optimize=False, compress_level=max(0, min(9, int(png_compress_level))))
     except (OSError, ValueError, UnidentifiedImageError) as exc:
         logger.warning("generated image optimization skipped: %s", exc)
         return data

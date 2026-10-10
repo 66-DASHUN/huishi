@@ -43,7 +43,7 @@ def test_enqueue_generation_task_uses_rq_backend(app, monkeypatch):
     app.config["IMAGE_API_TIMEOUT"] = 20
     app.config["RQ_RESULT_TTL_SECONDS"] = 60
     app.config["RQ_FAILURE_TTL_SECONDS"] = 86400
-    monkeypatch.setattr("huishi.generation_queue.get_rq_queue", lambda flask_app: FakeQueue())
+    monkeypatch.setattr("huishi.generation_queue.get_rq_queue", lambda flask_app, queue_name=None: FakeQueue())
 
     from huishi.generation_queue import enqueue_generation_task, run_generation_task_from_import_path
 
@@ -72,7 +72,7 @@ def test_enqueue_generation_task_raises_rq_timeout_to_cover_limit_wait_and_api_t
     app.config["RQ_JOB_TIMEOUT_SECONDS"] = 900
     app.config["GENERATION_LIMIT_WAIT_TIMEOUT_SECONDS"] = 840
     app.config["IMAGE_API_TIMEOUT"] = 180
-    monkeypatch.setattr("huishi.generation_queue.get_rq_queue", lambda flask_app: FakeQueue())
+    monkeypatch.setattr("huishi.generation_queue.get_rq_queue", lambda flask_app, queue_name=None: FakeQueue())
 
     from huishi.generation_queue import enqueue_generation_task
 
@@ -109,3 +109,99 @@ def test_redis_generation_limiter_ttl_uses_effective_rq_timeout(app, monkeypatch
     get_generation_limiter(app)
 
     assert captured["active_ttl_seconds"] >= 1080
+
+
+def test_video_task_routes_to_the_dedicated_video_queue(app, monkeypatch):
+    """视频必须进 huishi-video，而不是和图片抢同一条队列。
+
+    为什么要有这条：视频会在 worker 里轮询上游，单条最长占用槽位 20 分钟，
+    而图片只要几十秒。同队列时几个人提交视频就能把图片生成的槽位全占满。
+    """
+    picked = {}
+
+    class FakeQueue:
+        def enqueue(self, *_args, **_kwargs):
+            return "job-1"
+
+    def fake_get_rq_queue(_app, queue_name=None):
+        picked["queue_name"] = queue_name
+        return FakeQueue()
+
+    monkeypatch.setattr("huishi.generation_queue.get_rq_queue", fake_get_rq_queue)
+    app.config["GENERATION_QUEUE_BACKEND"] = "rq"
+    app.config["RQ_QUEUE_NAME"] = "huishi-generation"
+    app.config["RQ_VIDEO_QUEUE_NAME"] = "huishi-video"
+
+    from huishi.db import get_db
+    from huishi.generation_queue import enqueue_generation_task
+    from huishi.records import create_generation_task
+
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "INSERT INTO users (username, email, password_hash, role, email_verified, points, created_at) "
+            "VALUES ('route-video', '', 'h', 'user', 1, 100, 'now')"
+        )
+        db.commit()
+        user_id = int(db.execute("SELECT id FROM users WHERE username='route-video'").fetchone()["id"])
+        video_task = create_generation_task(
+            user_id=user_id, prompt="v", mode="video", ratio="16:9", resolution="720p",
+            actual_size="1280x720", quality="auto", output_format="mp4", count=1, cost=0,
+            media_type="video",
+        )
+        image_task = create_generation_task(
+            user_id=user_id, prompt="i", mode="text", ratio="1:1", resolution="2K",
+            actual_size="2048x2048", quality="auto", output_format="png", count=1, cost=0,
+            media_type="image",
+        )
+        db.commit()
+
+    enqueue_generation_task(app, video_task, [])
+    assert picked["queue_name"] == "huishi-video", picked
+
+    enqueue_generation_task(app, image_task, [])
+    assert picked["queue_name"] == "huishi-generation", picked
+
+
+def test_enqueue_outside_app_context_still_routes_correctly(app, monkeypatch):
+    """没有 app context 时也要正确分流。
+
+    这是真缺陷的回归测试：早先的实现在无 context 时读不到任务行，
+    被 except 吞掉后**静默回退到图片队列**，视频分流形同虚设。
+    """
+    picked = {}
+
+    class FakeQueue:
+        def enqueue(self, *_args, **_kwargs):
+            return "job-1"
+
+    def fake_get_rq_queue(_app, queue_name=None):
+        picked["queue_name"] = queue_name
+        return FakeQueue()
+
+    monkeypatch.setattr("huishi.generation_queue.get_rq_queue", fake_get_rq_queue)
+    app.config["GENERATION_QUEUE_BACKEND"] = "rq"
+    app.config["RQ_VIDEO_QUEUE_NAME"] = "huishi-video"
+
+    from huishi.db import get_db
+    from huishi.generation_queue import enqueue_generation_task
+    from huishi.records import create_generation_task
+
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "INSERT INTO users (username, email, password_hash, role, email_verified, points, created_at) "
+            "VALUES ('route-nocontext', '', 'h', 'user', 1, 100, 'now')"
+        )
+        db.commit()
+        user_id = int(db.execute("SELECT id FROM users WHERE username='route-nocontext'").fetchone()["id"])
+        video_task = create_generation_task(
+            user_id=user_id, prompt="v2", mode="video", ratio="16:9", resolution="720p",
+            actual_size="1280x720", quality="auto", output_format="mp4", count=1, cost=0,
+            media_type="video",
+        )
+        db.commit()
+
+    # 关键：在 with app.app_context() **之外**调用
+    enqueue_generation_task(app, video_task, [])
+    assert picked["queue_name"] == "huishi-video", picked

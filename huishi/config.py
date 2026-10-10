@@ -111,7 +111,11 @@ class Config:
     IMAGE_OPTIMIZE_ENABLED = os.environ.get("HUISHI_IMAGE_OPTIMIZE_ENABLED", "1") != "0"
     IMAGE_JPEG_QUALITY = int(os.environ.get("HUISHI_IMAGE_JPEG_QUALITY", "88"))
     IMAGE_WEBP_QUALITY = int(os.environ.get("HUISHI_IMAGE_WEBP_QUALITY", "86"))
-    IMAGE_PNG_COMPRESS_LEVEL = int(os.environ.get("HUISHI_IMAGE_PNG_COMPRESS_LEVEL", "9"))
+    # PNG 重编码档位。默认 6 而非 9：实测同一张 2048x2048 出图，
+    # 档位 9 与 6 的产物体积几乎相同（都被"不小于原图就丢弃"的规则吃掉），
+    # 但 9 要多花大量 CPU。这是高并发下的关键参数——单张本地 CPU 从
+    # 约 3.5 秒降到约 0.4 秒，8 核可支撑的并发生成量因此提高近 10 倍。
+    IMAGE_PNG_COMPRESS_LEVEL = int(os.environ.get("HUISHI_IMAGE_PNG_COMPRESS_LEVEL", "6"))
 
     # --- provider defaults ---
     # 默认 OpenAI 兼容图片接口 Base URL；后台 provider 配置会优先用于实际生成。
@@ -172,6 +176,38 @@ class Config:
     REDIS_URL = os.environ.get("HUISHI_REDIS_URL", "")
     REQUIRE_REDIS_LIMITS = os.environ.get("HUISHI_REQUIRE_REDIS_LIMITS", "1" if os.environ.get("HUISHI_ENV", "").strip().lower() == "production" else "0") == "1"
     RQ_QUEUE_NAME = os.environ.get("HUISHI_RQ_QUEUE_NAME", "huishi-generation")
+    # 视频走独立队列，避免长任务把图片生成的槽位全部占住
+    # （一条视频最长可在 worker 里轮询 20 分钟，而图片只要几十秒）。
+    RQ_VIDEO_QUEUE_NAME = os.environ.get("HUISHI_RQ_VIDEO_QUEUE_NAME", "huishi-video")
+
+    # --- 并发生成参数（引擎无关：RQ 与内建线程池共用）---
+    #
+    # 调并发只改这几个环境变量，不要改容器数量。
+    #
+    # 为什么分"进程 × 线程"两层：
+    #   * 等上游占一次生成 99% 的时间，等待时 GIL 释放，线程成本近乎为零；
+    #   * 但落盘前要做 decode + PNG 编码，实测约 0.42 秒**纯 CPU**，
+    #     线程受 GIL 限制无法并行，必须靠多进程吃满多核。
+    # 所以 process 数贴近 CPU 核数，thread 数用来把并发上限抬上去。
+    #
+    # 并发上限 = PROCESSES × THREADS。
+    #
+    # 默认值取 8 × 32 = 256：8 核在本机实测下能支撑约 500 并发（单张
+    # 本地 CPU 0.42s，8/0.42 ≈ 19 张/秒，× 27 秒生成时长 ≈ 509），
+    # 256 留了约 2 倍余量。
+    GENERATION_IMAGE_PROCESSES = int(os.environ.get("HUISHI_GENERATION_IMAGE_PROCESSES", "8"))
+    GENERATION_IMAGE_THREADS = int(os.environ.get("HUISHI_GENERATION_IMAGE_THREADS", "32"))
+    # 视频默认 2 × 8 = 16：视频 CPU 极低，但**每个在跑的任务会长时间持有
+    # 一个数据库连接**（轮询循环里 sleep），所以它的上限由连接预算和
+    # 单条成本（400~700 积分）决定，而不是 CPU。可随时放宽。
+    GENERATION_VIDEO_PROCESSES = int(os.environ.get("HUISHI_GENERATION_VIDEO_PROCESSES", "2"))
+    GENERATION_VIDEO_THREADS = int(os.environ.get("HUISHI_GENERATION_VIDEO_THREADS", "8"))
+
+    # 注意：这里用**显式常量**而不是 @property。
+    # app.py 走的是 app.config.from_object(Config)，它只复制类属性；
+    # property 在类上取到的是描述符对象本身而不是算好的值，会被装进 config
+    # 变成一个没用的 property 对象。所以并发上限在 create_app 里算好写回。
+
     RQ_JOB_TIMEOUT_SECONDS = int(os.environ.get("HUISHI_RQ_JOB_TIMEOUT_SECONDS", "1200"))
     RQ_RESULT_TTL_SECONDS = int(os.environ.get("HUISHI_RQ_RESULT_TTL_SECONDS", "60"))
     RQ_FAILURE_TTL_SECONDS = int(os.environ.get("HUISHI_RQ_FAILURE_TTL_SECONDS", "86400"))

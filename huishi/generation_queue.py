@@ -43,13 +43,44 @@ def get_generation_executor(app: Flask) -> ThreadPoolExecutor:
     return _executor
 
 
+def _media_type_for_task(app: Flask, task_id: int) -> str:
+    """读任务行拿到 media_type，用于选队列。
+
+    必须自己保证 app context：调用点里（后台任务、脚本、测试）不一定已经在
+    请求上下文里。没有 context 时 `get_db()` 会抛 "Working outside of
+    application context"，而这里的调用者用 except 兜底 → 会**静默回退到
+    默认队列**，于是视频被塞进图片队列，分流形同虚设。所以这里显式压一个
+    context，而不是依赖调用环境。
+    """
+    from flask import has_app_context
+
+    def _read() -> str:
+        probe = get_generation_task(task_id)
+        if probe is None:
+            return "image"
+        return str(probe.get("media_type") or "image")
+
+    try:
+        if has_app_context():
+            return _read()
+        with app.app_context():
+            return _read()
+    except Exception:
+        app.logger.exception(
+            "queue routing lookup failed task_id=%s; using default queue", task_id
+        )
+        return "image"
+
+
 def enqueue_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | None = None) -> None:
     if app.config.get("GENERATION_INLINE"):
         run_generation_task(app, task_id, cleanup_paths or [])
         return
     backend = str(app.config.get("GENERATION_QUEUE_BACKEND", "thread")).strip().lower()
     if backend == "rq":
-        queue = get_rq_queue(app)
+        # 按任务行判断媒体类型来选队列（视频走独立队列，避免长轮询占满图片槽位）。
+        media_type = _media_type_for_task(app, task_id)
+        queue = get_rq_queue(app, generation_queue_name(app, media_type))
         queue.enqueue(
             run_generation_task_from_import_path,
             str(app.config.get("APP_IMPORT_PATH", "app:create_app")),
@@ -73,7 +104,25 @@ def effective_rq_job_timeout_seconds(app: Flask) -> int:
     return max(configured, safe_floor)
 
 
-def get_rq_queue(app: Flask):
+def generation_queue_name(app: Flask, media_type: str = "image") -> str:
+    """按媒体类型选择队列名。
+
+    视频单独一条队列，避免它的长轮询把图片生成的槽位占满。
+    """
+    if str(media_type or "image").strip().lower() == "video":
+        return str(app.config.get("RQ_VIDEO_QUEUE_NAME", "huishi-video"))
+    return str(app.config.get("RQ_QUEUE_NAME", "huishi-generation"))
+
+
+def generation_queue_names(app: Flask) -> tuple[str, str]:
+    """返回 (图片队列名, 视频队列名)。给 worker 侧启动时用。"""
+    return (
+        str(app.config.get("RQ_QUEUE_NAME", "huishi-generation")),
+        str(app.config.get("RQ_VIDEO_QUEUE_NAME", "huishi-video")),
+    )
+
+
+def get_rq_queue(app: Flask, queue_name: str | None = None):
     redis_url = str(app.config.get("REDIS_URL") or "").strip()
     if not redis_url:
         raise RuntimeError("HUISHI_REDIS_URL must be set when HUISHI_GENERATION_QUEUE_BACKEND=rq")
@@ -83,7 +132,7 @@ def get_rq_queue(app: Flask):
     except ImportError as exc:
         raise RuntimeError("Install redis and rq to use HUISHI_GENERATION_QUEUE_BACKEND=rq") from exc
     connection = Redis.from_url(redis_url)
-    return Queue(str(app.config.get("RQ_QUEUE_NAME", "huishi-generation")), connection=connection)
+    return Queue(queue_name or generation_queue_name(app, "image"), connection=connection)
 
 
 def get_generation_limiter(app: Flask):
@@ -153,6 +202,11 @@ def run_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | Non
             wait_timeout = float(app.config.get("GENERATION_LIMIT_WAIT_TIMEOUT_SECONDS", 840))
             # PostgreSQL SELECTs open a transaction too; release it before capacity waits.
             get_db().commit()
+            # 连**连接本身**也放掉：下面要等限流（最多 840 秒）再等上游（约 33 秒
+            # 到 180 秒），这期间不需要数据库。高并发下这是硬约束——
+            # 每个线程持一个连接，256 个线程会直接打爆 Postgres 的 100 连接上限。
+            # get_db() 是惰性的，下一处用到时会自动重连。
+            close_db()
             try:
                 lease = limiter.acquire(
                     block=True,
@@ -385,6 +439,10 @@ def run_video_generation_task(app: Flask, task_id: int, cleanup_paths: list[str]
                     return
                 if state.status == 'completed':
                     break
+                # 放掉连接再睡：视频轮询最长 300 秒，全程占着一个 Postgres
+                # 连接纯属浪费；高并发下连接是最紧的资源。
+                # 下一轮 save_phase / 状态更新会由 get_db() 自动重连。
+                close_db()
                 time.sleep(min(30, max(1, float((provider.get('settings') or {}).get('poll_interval', 5)))))
             if state is None or state.status != 'completed':
                 raise RetryableVideoError('视频仍在上游排队或生成')
