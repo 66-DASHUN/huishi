@@ -8,7 +8,7 @@
     "build:home": "npm run build:home:js && npm run build:home:css",
     "build:home:js": "node tools/build_home_js.mjs",
     "build:home:css": "tailwindcss -c tailwind.home.config.js -i static/css/home-tailwind.input.css -o static/css/home-tailwind.css --minify",
-    "check:js": "node tests/check_settings_models.cjs && node tests/check_workspace_mention.cjs"
+    "check:js": "node tests/check_settings_models.cjs && node tests/check_workspace_mention.cjs && node tests/check_canvas_base_path.cjs"
   },
   "dependencies": {
     "react": "18.3.1",

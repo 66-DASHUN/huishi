@@ -10,6 +10,12 @@ COPY web ./
 
 ARG CANVAS_PARENT_ORIGINS
 ENV CANVAS_PARENT_ORIGINS=${CANVAS_PARENT_ORIGINS}
+
+# 挂载前缀。主站把它挂到同域子路径（/canvas-app），这样用户永远只看到绘世的
+# 地址；留空则部署在根路径（独立域名、本地开发）。构建期必须传入——Next 的
+# basePath 是编译期概念，运行期改不了。
+ARG CANVAS_BASE_PATH=
+ENV CANVAS_BASE_PATH=${CANVAS_BASE_PATH}
 RUN bun run build
 
 FROM node:22-bookworm-slim

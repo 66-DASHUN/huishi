@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 
+import { withBasePath } from "@/lib/app-path";
 type UserStatusActionsProps = {
     showConfig?: boolean;
     variant?: "default" | "canvas";
@@ -23,7 +24,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     return (
         <div className="inline-flex shrink-0 items-center gap-1">
             {showConfig ? (
-                <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => router.push("/settings")} aria-label="配置" title="配置">
+                <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => router.push(withBasePath("/settings"))} aria-label="配置" title="配置">
                     <Settings2 className="size-4" />
                 </button>
             ) : null}

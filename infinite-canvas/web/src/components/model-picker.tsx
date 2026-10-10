@@ -5,6 +5,7 @@ import { Cpu } from "lucide-react";
 
 import { Select } from "antd";
 import { cn } from "@/lib/utils";
+import { withBasePath } from "@/lib/app-path";
 import { modelOptionLabel, modelOptionName, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type ModelPickerProps = {
@@ -89,7 +90,9 @@ function ModelLabel({ config, model, label }: { config: AiConfig; model: string;
 
 function ModelIcon({ model }: { model: string }) {
     const icon = resolveModelIcon(modelOptionName(model));
-    return icon ? <img src={icon} alt="" loading="lazy" decoding="async" className="size-4 shrink-0 dark:invert" /> : <Cpu className="size-4 shrink-0 opacity-70" />;
+    // 原生 <img> 不走 Next 的资源改写，挂了 basePath 后必须自己带前缀，
+    // 否则 /icons/*.svg 会 404（图标静默消失，只剩文字）。
+    return icon ? <img src={withBasePath(icon)} alt="" loading="lazy" decoding="async" className="size-4 shrink-0 dark:invert" /> : <Cpu className="size-4 shrink-0 opacity-70" />;
 }
 
 function resolveModelIcon(model: string) {

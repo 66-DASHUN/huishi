@@ -40,13 +40,9 @@ def home_auth_url(mode: str = "login", target: str | None = None) -> str:
 
 
 def render_home_auth(mode: str = "login", target: str | None = None):
-    from huishi.providers import get_canvas_settings
-    canvas_settings = get_canvas_settings()
-    canvas_app_url = str(canvas_settings.get("canvas_app_url") or "").strip().rstrip("/")
     return render_template(
         "home.html",
         auth_intent={"mode": mode, "next": safe_next_url(target)},
-        canvas_app_url=canvas_app_url,
     )
 
 

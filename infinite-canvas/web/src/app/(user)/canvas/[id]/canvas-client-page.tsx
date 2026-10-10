@@ -76,6 +76,7 @@ import {
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/media";
 
+import { withBasePath } from "@/lib/app-path";
 const CanvasAssistantPanel = dynamic(() => import("../components/canvas-assistant-panel").then((module) => module.CanvasAssistantPanel), { ssr: false });
 const AssetPickerModal = dynamic(() => import("../components/asset-picker-modal").then((module) => module.AssetPickerModal), { ssr: false });
 
@@ -1096,14 +1097,14 @@ function InfiniteCanvasPage() {
     const createAndOpenProject = useCallback(() => {
         if (!confirmCanvasNavigation(isGenerating)) return;
         createProject(nextCanvasProjectTitle(useCanvasStore.getState().projects, "新建画布"));
-        router.push(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`);
+        router.push(withBasePath(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`));
     }, [createProject, hostSessionQuery, isGenerating, router]);
 
     const deleteCurrentProject = useCallback(() => {
         if (!confirmCanvasNavigation(isGenerating)) return;
         deleteProjects([projectId]);
         cleanupAssetImages();
-        router.push(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`);
+        router.push(withBasePath(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`));
     }, [cleanupAssetImages, deleteProjects, hostSessionQuery, isGenerating, projectId, router]);
 
     const handleCanvasMouseDown = useCallback(
@@ -2776,7 +2777,7 @@ function InfiniteCanvasPage() {
     }
 
     if (projectLoadState === "missing") {
-        return <CanvasStatusScreen status="error" onAction={() => router.replace(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`)} />;
+        return <CanvasStatusScreen status="error" onAction={() => router.replace(withBasePath(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`))} />;
     }
 
     if (projectLoadState === "retry") {
@@ -2836,12 +2837,12 @@ function InfiniteCanvasPage() {
                             if (hostEmbedded && hostOrigin) {
                                 window.parent.location.href = hostOrigin + "/";
                             } else {
-                                router.push("/");
+                                router.push(withBasePath("/"));
                             }
                         }}
                         onProjects={() => {
                             if (!confirmCanvasNavigation(isGenerating)) return;
-                            router.push(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`);
+                            router.push(withBasePath(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`));
                         }}
                         onCreateProject={createAndOpenProject}
                         onDeleteProject={deleteCurrentProject}

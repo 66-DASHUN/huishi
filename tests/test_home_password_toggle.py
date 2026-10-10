@@ -11,7 +11,16 @@ def test_home_auth_modal_has_password_visibility_toggle():
     assert source.count("<PasswordField") == 2
 
 
-def test_home_injects_configured_canvas_url(monkeypatch, tmp_path):
+def test_home_no_longer_injects_the_canvas_app_url(monkeypatch, tmp_path):
+    """首页不得再把画布应用地址交给前端。
+
+    这条钉的是一个"看起来像嵌进来"的回归：首页「画布」卡片曾经 href 指向
+    canvas_app_url，也就是画布应用的落地页（另一个域名+端口）。用户点一下
+    就整页离开了绘世，观感上像外挂。现在卡片指向主站 /canvas，用 iframe
+    内嵌，地址栏始终不变。
+
+    所以这里反过来断言：即便后台配了画布地址，首页也不再注入它。
+    """
     monkeypatch.setenv("HUISHI_DATABASE", str(tmp_path / "home.sqlite3"))
 
     from app import create_app
@@ -28,13 +37,16 @@ def test_home_injects_configured_canvas_url(monkeypatch, tmp_path):
         response = client.get("/")
 
     assert response.status_code == 200
-    assert b'window.__HUISHI_CANVAS_URL__ = "http://127.0.0.1:3000";' in response.data
+    assert b"__HUISHI_CANVAS_URL__" not in response.data
+    assert b"127.0.0.1:3000" not in response.data
 
 
 def test_home_hero_source_has_authenticated_quick_cards():
     source = Path("static/js/home.js").read_text(encoding="utf-8")
 
-    assert 'const CANVAS_URL = window.__HUISHI_CANVAS_URL__ || "";' in source
+    # 画布卡片必须指向主站路由，而不是画布应用地址（见上一条测试的说明）
+    assert 'href="/canvas"' in source
+    assert "CANVAS_URL" not in source
     assert "function CanvasIcon()" in source
     assert "function PromptsIcon()" in source
     assert "function MaterialsIcon()" in source

@@ -1,5 +1,6 @@
 import { compactApiParams, serializeApiParams } from "@/services/api/request";
 
+import { withBasePath } from "@/lib/app-path";
 export type Prompt = {
     id: string;
     title: string;
@@ -32,7 +33,7 @@ export async function fetchPrompts({ keyword = "", tag = [], category = ALL_PROM
             ...(pageSize ? { pageSize } : {}),
         }),
     );
-    const response = await fetch(`/api/prompts${params.size ? `?${params}` : ""}`);
+    const response = await fetch(withBasePath(`/api/prompts${params.size ? `?${params}` : ""}`));
     if (!response.ok) throw new Error("获取提示词失败");
     return (await response.json()) as PromptListResponse;
 }

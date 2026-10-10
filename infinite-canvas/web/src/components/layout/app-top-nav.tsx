@@ -9,10 +9,13 @@ import { AppConfigModal } from "@/components/layout/app-config-modal";
 import { MobileNavDrawer } from "@/components/layout/mobile-nav-drawer";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
+import { withoutBasePath } from "@/lib/app-path";
 import { cn } from "@/lib/utils";
 
 export function AppTopNav() {
-    const pathname = usePathname();
+    // 剥掉挂载前缀：下面的判断用的都是应用内路径（/canvas、/prompts），
+    // 挂了 basePath 后 usePathname 的返回值形如 /canvas-app/canvas。
+    const pathname = withoutBasePath(usePathname());
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     // Embedded workspace routes already use the host rail navigation.
     const hideHeader = /^\/(?:canvas|prompts)(\/|$)/.test(pathname);

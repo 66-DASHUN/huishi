@@ -45,7 +45,9 @@ def test_canvas_top_bar_hides_global_config_action():
 @canvas_project_available
 def test_global_config_action_routes_to_settings_page():
     source = (CANVAS_SRC_ROOT / "components/layout/user-status-actions.tsx").read_text(encoding="utf-8")
-    assert 'router.push("/settings")' in source
+    # 路径经 withBasePath 包裹：画布挂在主站同域子路径下，应用内绝对路径若不带
+    # 前缀，会跳到主站根路径去。见 tests/test_canvas_base_path_contract.py。
+    assert 'router.push(withBasePath("/settings"))' in source
     assert "openConfigDialog" not in source
     assert "setConfigDialogOpen" not in source
 
@@ -83,7 +85,7 @@ def test_canvas_new_project_titles_use_next_available_number():
     assert "nextCanvasProjectTitle(useCanvasStore.getState().projects, \"新建画布\")" in editor_source
     assert "nextCanvasProjectTitle(useCanvasStore.getState().projects, \"无限画布\")" not in editor_source
     assert "router.push(`/canvas/${id}" not in editor_create_source
-    assert "router.push(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : \"\"}`);" in editor_create_source
+    assert "router.push(withBasePath(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : \"\"}`));" in editor_create_source
     assert "projects.length + 1" not in list_source
     assert "projects.length + 1" not in editor_source
 

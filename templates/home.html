@@ -11,7 +11,6 @@
 <div id="root"></div>
 {% endblock %}
 {% block scripts %}
-<script>window.__HUISHI_CANVAS_URL__ = {{ canvas_app_url|tojson }};</script>
 <script>window.__HUISHI_CSRF_TOKEN__ = {{ csrf_token|tojson }};</script>
 {% if auth_intent %}
 <script>window.__HUISHI_AUTH_INTENT__ = {{ auth_intent|tojson }};</script>

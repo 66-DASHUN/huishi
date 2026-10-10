@@ -90,6 +90,9 @@ services:
       dockerfile: Dockerfile.huishi
       args:
         CANVAS_PARENT_ORIGINS: https://paintiworld.dashun9527.com
+        # 挂在主站同域子路径下。改这里要同时改下面的 healthcheck——
+        # 加了前缀之后根路径是 404，探针会一直失败。
+        CANVAS_BASE_PATH: /canvas-app
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -98,7 +101,7 @@ services:
     ports:
       - "127.0.0.1:13000:3000"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/canvas-app/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 6s
       retries: 20

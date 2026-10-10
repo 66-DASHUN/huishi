@@ -359,9 +359,11 @@ def create_app(*, testing: bool = False) -> Flask:
 
     @app.get("/")
     def home():
-        canvas_settings = provider_store.get_canvas_settings()
-        canvas_app_url = str(canvas_settings.get("canvas_app_url") or "").strip().rstrip("/")
-        return render_template("home.html", canvas_app_url=canvas_app_url)
+        # 首页此前把 canvas_app_url 注入给前端，让「画布」卡片直接跳到画布应用的
+        # 地址——那会把用户整页带离绘世（另一个域名+端口），观感上像外挂。卡片
+        # 现在指向主站 /canvas（iframe 内嵌，地址栏不变），这个注入因此没有消费方，
+        # 一并去掉，免得留下会再次被误用的死代码。
+        return render_template("home.html")
 
     @app.get("/assets/<path:filename>")
     def vite_assets(filename: str):

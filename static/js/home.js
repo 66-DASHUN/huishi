@@ -14,7 +14,6 @@ const HERO_POSTER = "/static/media/shouyeshipin-poster.jpg";
 const CAPABILITIES_VIDEO = "/static/media/huishi-workflow-cloud.mp4";
 const CAPABILITIES_POSTER = "/static/media/huishi-workflow-cloud-poster.jpg";
 const HOME_PROMPT_DRAFT_KEY = "huishi.home.promptDraft";
-const CANVAS_URL = window.__HUISHI_CANVAS_URL__ || "";
 const CSRF_TOKEN = window.__HUISHI_CSRF_TOKEN__ || "";
 function safeNextUrl(value) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/workspace";
@@ -503,7 +502,10 @@ function Hero({ session, onAuthOpen }) {
           </div>
           {session.authenticated ? (
             <motion.div className="hero-utility-items hero-auth-quick-links" initial={entrance.initial} animate={entrance.animate} transition={{ ...entrance.transition, delay: 1.3 }}>
-              <StatCard key="canvas" href={CANVAS_URL || "/canvas"} icon={<CanvasIcon />} value="画布" label="我的画布" />
+              {/* 指向主站 /canvas，而不是画布应用的地址：那张卡此前直接跳到
+                  画布应用的落地页（另一个域名+端口），用户点一下整页就离开了绘世，
+                  观感上像外挂；而 /canvas 会用 iframe 内嵌，地址栏始终是绘世。 */}
+              <StatCard key="canvas" href="/canvas" icon={<CanvasIcon />} value="画布" label="我的画布" />
               <StatCard key="prompts" href="/prompts" icon={<PromptsIcon />} value="词库" label="提示词库" />
               <StatCard key="assets" href="/assets" icon={<MaterialsIcon />} value="素材" label="我的素材" />
             </motion.div>
