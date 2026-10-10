@@ -260,6 +260,11 @@ def finalize_generation_task(
     from huishi.routes_workspace import _finalize_generation
 
     dialogue_id = task.get("dialogue_id")
+    # asset_source 由任务 metadata 透传（画布入队时写 {"asset_source": "canvas"}）。
+    # 不透传会落成默认 'image'，导致画布记录混进工作台的对话视图
+    # （那里按 asset_source != 'canvas' 过滤，见 routes_workspace.py:1940）。
+    metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+    asset_source = str(metadata.get("asset_source") or "image").strip() or "image"
     return _finalize_generation(
         user_id=int(task["user_id"]),
         prompt=str(task["prompt"]),
@@ -275,6 +280,7 @@ def finalize_generation_task(
         dialogue_id=int(dialogue_id) if dialogue_id is not None else None,
         bypass_billing=bypass_billing,
         commit=commit,
+        asset_source=asset_source,
         media_type=str(task.get("media_type") or "image"),
         duration_seconds=int(task.get("duration_seconds") or 0),
         cost_snapshot=int(task['cost']) // max(1,int(task['count'])),

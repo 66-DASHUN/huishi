@@ -110,6 +110,36 @@ def _save_image_provider(*, model: str, enabled: bool = True, resolutions=None, 
     )
 
 
+
+def _submit_and_fetch(client, payload, *, expect_status=202):
+    """提交画布生成，然后按新协议取回结果。
+
+    入队版协议：POST 返回 202 + task；图片从 GET /api/canvas/generate/<id> 取。
+    测试环境 GENERATION_INLINE=True，入队即同步执行完，所以提交后立刻查询
+    就能拿到终态，无需轮询等待。
+
+    注意查询是 **GET**，没有 body，而 `canvas_api_user` 要求 token 来自
+    `X-Canvas-Session` 头 / body / 查询参数三者之一——所以这里必须显式带上头，
+    否则会拿到 401 missing_token。
+
+    返回 (submit_response, status_response 或 None)。
+    """
+    token = str(payload.get("token") or "")
+    headers = {"Origin": "http://127.0.0.1:3000", "X-Canvas-Session": token}
+    submit = client.post(
+        "/api/canvas/generate",
+        json=payload,
+        headers=headers,
+    )
+    if submit.status_code != expect_status:
+        return submit, None
+    task_id = (submit.get_json() or {}).get("task", {}).get("id")
+    if not task_id:
+        return submit, None
+    status = client.get(f"/api/canvas/generate/{task_id}", headers=headers)
+    return submit, status
+
+
 def test_canvas_generate_rejects_missing_token(app):
     with app.test_client() as client:
         resp = client.post(
@@ -179,7 +209,7 @@ def test_canvas_generate_rejects_insufficient_balance(app):
 
 
 def test_canvas_generate_deducts_points_and_returns_images(app, monkeypatch):
-    monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", _fake_generate)
+    monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", _fake_generate)
 
     with app.app_context():
         user_id = _create_user(points=50)
@@ -187,19 +217,25 @@ def test_canvas_generate_deducts_points_and_returns_images(app, monkeypatch):
         token = _issue_token(user_id)
 
     with app.test_client() as client:
-        resp = client.post(
-            "/api/canvas/generate",
-            json={"token": token, "prompt": "a red circle", "ratio": "1:1", "resolution": "2K", "count": 1, "model": "gpt-image-2"},
-            headers={"Origin": "http://127.0.0.1:3000"},
+        submit, status = _submit_and_fetch(
+            client,
+            {"token": token, "prompt": "a red circle", "ratio": "1:1", "resolution": "2K", "count": 1, "model": "gpt-image-2"},
         )
 
-    assert resp.status_code == 200
-    data = resp.get_json()
+    # 入队版：提交返回 202 + 任务号
+    assert submit.status_code == 202, submit.get_json()
+    submit_data = submit.get_json()
+    assert submit_data["ok"] is True
+    assert submit_data["task"]["id"]
+    assert submit_data["cost"] > 0
+    # 结果从查询端点取
+    assert status.status_code == 200, status.get_json()
+    data = status.get_json()
     assert data["ok"] is True
+    assert data["task"]["status"] == "succeeded"
     assert len(data["images"]) >= 1
     assert data["images"][0]["dataUrl"].startswith("data:image/")
-    assert data["cost"] > 0
-    assert data["balance"] == 50 - data["cost"]
+    assert data["balance"] == 50 - submit_data["cost"]
 
 
 def test_canvas_generate_passes_configured_count_and_bills_each_image(app, monkeypatch):
@@ -209,23 +245,23 @@ def test_canvas_generate_passes_configured_count_and_bills_each_image(app, monke
         captured.update(kwargs)
         return _fake_generate(**kwargs)
 
-    monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", fake_generate)
+    monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", fake_generate)
     with app.app_context():
         user_id = _create_user(points=50)
         _ensure_image_provider()
         token = _issue_token(user_id)
 
     with app.test_client() as client:
-        resp = client.post(
-            "/api/canvas/generate",
-            json={"token": token, "prompt": "three variants", "count": 3, "model": "gpt-image-2"},
-            headers={"Origin": "http://127.0.0.1:3000"},
+        submit, status = _submit_and_fetch(
+            client,
+            {"token": token, "prompt": "three variants", "count": 3, "model": "gpt-image-2"},
         )
 
-    assert resp.status_code == 200
+    assert submit.status_code == 202, submit.get_json()
     assert captured["count"] == 3
     # gpt-image-2 的 2K 定价为 3 积分/张，3 张共 9（旧断言按 1K 的 2 分/张写）。
-    assert resp.get_json()["cost"] == 9
+    assert submit.get_json()["cost"] == 9
+    assert status.status_code == 200
 
 
 def test_canvas_generate_uses_selected_model_for_generation_record_and_billing(app, monkeypatch):
@@ -237,7 +273,7 @@ def test_canvas_generate_uses_selected_model_for_generation_record_and_billing(a
         result["model_source"] = kwargs["model"]
         return result
 
-    monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", fake_generate)
+    monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", fake_generate)
     with app.app_context():
         user_id = _create_user(points=50, username="selected-model-user")
         token = _issue_token(user_id)
@@ -254,15 +290,15 @@ def test_canvas_generate_uses_selected_model_for_generation_record_and_billing(a
         get_db().commit()
 
     with app.test_client() as client:
-        response = client.post(
-            "/api/canvas/generate",
-            json={"token": token, "prompt": "banana cat", "resolution": "2K", "model": "gemini-3.1-flash-image"},
-            headers={"Origin": "http://127.0.0.1:3000"},
+        submit, status = _submit_and_fetch(
+            client,
+            {"token": token, "prompt": "banana cat", "resolution": "2K", "model": "gemini-3.1-flash-image"},
         )
 
-    assert response.status_code == 200
-    assert response.get_json()["cost"] == 7
-    assert response.get_json()["balance"] == 43
+    assert submit.status_code == 202, submit.get_json()
+    assert submit.get_json()["cost"] == 7
+    assert status.status_code == 200
+    assert status.get_json()["balance"] == 43
     assert captured["model"] == "gemini-3.1-flash-image"
     with app.app_context():
         record = get_db().execute("SELECT model_source, points_charged FROM records WHERE user_id = ?", (user_id,)).fetchone()
@@ -280,7 +316,7 @@ def test_canvas_generate_user_key_mode_uses_selected_enabled_provider_model(app,
         result["model_source"] = kwargs["model"]
         return result
 
-    monkeypatch.setattr("huishi.routes_workspace.generate_image", fake_generate)
+    monkeypatch.setattr("huishi.generation_queue.generate_image", fake_generate)
     with app.app_context():
         user_id = _create_user(points=50, username="user-key-selected-model")
         token = _issue_token(user_id)
@@ -290,14 +326,16 @@ def test_canvas_generate_user_key_mode_uses_selected_enabled_provider_model(app,
         get_db().commit()
 
     with app.test_client() as client:
-        response = client.post(
-            "/api/canvas/generate",
-            json={"token": token, "prompt": "banana with own key", "resolution": "2K", "model": "gemini-3.1-flash-image"},
-            headers={"Origin": "http://127.0.0.1:3000"},
+        submit, status = _submit_and_fetch(
+            client,
+            {"token": token, "prompt": "banana with own key", "resolution": "2K", "model": "gemini-3.1-flash-image"},
         )
 
-    assert response.status_code == 200
-    assert response.get_json()["cost"] == 0
+    assert submit.status_code == 202, submit.get_json()
+    # 自备 Key 不扣积分
+    assert submit.get_json()["cost"] == 0
+    assert submit.get_json()["billing_mode"] == "user_key"
+    assert status.status_code == 200
     assert captured["model"] == "gemini-3.1-flash-image"
     assert captured["base_url"] == "https://banana.example"
 
@@ -308,7 +346,7 @@ def test_canvas_generate_records_selected_model_even_if_upstream_metadata_differ
         result["model_source"] = "untrusted-upstream-label"
         return result
 
-    monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", fake_generate)
+    monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", fake_generate)
     with app.app_context():
         user_id = _create_user(points=50, username="record-selected-model-user")
         token = _issue_token(user_id)
@@ -316,16 +354,19 @@ def test_canvas_generate_records_selected_model_even_if_upstream_metadata_differ
         get_db().commit()
 
     with app.test_client() as client:
-        response = client.post(
-            "/api/canvas/generate",
-            json={"token": token, "prompt": "record selected model", "resolution": "2K", "model": "gemini-3.1-flash-image"},
-            headers={"Origin": "http://127.0.0.1:3000"},
+        submit, status = _submit_and_fetch(
+            client,
+            {"token": token, "prompt": "record selected model", "resolution": "2K", "model": "gemini-3.1-flash-image"},
         )
 
-    assert response.status_code == 200
+    assert submit.status_code == 202, submit.get_json()
+    assert status.status_code == 200
     with app.app_context():
-        record = get_db().execute("SELECT model_source FROM records WHERE user_id = ?", (user_id,)).fetchone()
+        record = get_db().execute("SELECT model_source, asset_source FROM records WHERE user_id = ?", (user_id,)).fetchone()
         assert record["model_source"] == "gemini-3.1-flash-image"
+        # 入队后 asset_source 经任务 metadata 透传到 worker；
+        # 不透传会落成 'image'，画布记录就会混进工作台的对话视图。
+        assert record["asset_source"] == "canvas"
 
 
 @pytest.mark.parametrize(
@@ -338,7 +379,7 @@ def test_canvas_generate_records_selected_model_even_if_upstream_metadata_differ
 )
 def test_canvas_generate_rejects_invalid_disabled_or_unsupported_model(app, monkeypatch, model, resolution, enabled):
     monkeypatch.setattr(
-        "huishi.routes_workspace.generate_image_with_failover",
+        "huishi.generation_queue.generate_image_with_failover",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("upstream must not be called")),
     )
     with app.app_context():
@@ -365,7 +406,7 @@ def test_canvas_generate_rejects_invalid_disabled_or_unsupported_model(app, monk
 
 
 def test_canvas_generate_creates_record_in_db(app, monkeypatch):
-    monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", _fake_generate)
+    monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", _fake_generate)
 
     with app.app_context():
         user_id = _create_user(points=50)
@@ -373,14 +414,14 @@ def test_canvas_generate_creates_record_in_db(app, monkeypatch):
         token = _issue_token(user_id)
 
     with app.test_client() as client:
-        resp = client.post(
-            "/api/canvas/generate",
-            json={"token": token, "prompt": "sunset", "ratio": "16:9", "resolution": "1K", "model": "gpt-image-2"},
-            headers={"Origin": "http://127.0.0.1:3000"},
+        submit, status = _submit_and_fetch(
+            client,
+            {"token": token, "prompt": "sunset", "ratio": "16:9", "resolution": "1K", "model": "gpt-image-2"},
         )
 
-    assert resp.status_code == 200
-    data = resp.get_json()
+    assert submit.status_code == 202, submit.get_json()
+    assert status.status_code == 200
+    data = status.get_json()["task"]
     with app.app_context():
         record = get_db().execute(
             "SELECT * FROM records WHERE id = ?", (data["record_id"],)
@@ -392,7 +433,7 @@ def test_canvas_generate_creates_record_in_db(app, monkeypatch):
 
 
 def test_canvas_generate_cors_headers(app, monkeypatch):
-    monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", _fake_generate)
+    monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", _fake_generate)
 
     with app.app_context():
         user_id = _create_user(points=50)

@@ -41,12 +41,24 @@ type HostGeneratePayload = {
     model?: string;
 };
 
-type HostGenerateResponse = {
+/** 提交响应：返回任务号，不再直接给图。 */
+type HostSubmitResponse = {
     ok: boolean;
-    images?: Array<{ dataUrl: string }>;
+    task?: { id?: number | string };
     error?: string;
-    balance?: number;
     cost?: number;
+    balance?: number;
+};
+
+/** 轮询响应：任务状态 + 成功时的图片 data URL。 */
+type HostStatusResponse = {
+    ok: boolean;
+    task?: { status?: string; error_message?: string };
+    images?: Array<{ dataUrl: string }>;
+    /** 任务成功但结果文件读不出来，前端应提示而非当作成功。 */
+    images_unavailable?: boolean;
+    balance?: number;
+    error?: string;
 };
 
 /** 已知 WxH → ratio 映射表 */
@@ -131,6 +143,13 @@ export async function requestHostGeneration(
         model: hostModelId(opts.model),
     };
 
+    // 主站已改为**异步任务**：这里只提交，然后轮询等结果。
+    //
+    // 为什么改：主站此前是在 Web 线程里同步等上游（实测生图平均 22.9s、
+    // 最长 43.8s），而它只有 8 个 Web 单元且每个请求独占一个数据库连接，
+    // 并发一上来整个站点一起变慢。改为入队后等上游的活交给后台 worker。
+    //
+    // 对调用方没有影响：本函数签名与返回值都不变，轮询细节封在这里。
     const response = await fetch(proxy.generateUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Canvas-Session": proxy.token },
@@ -138,13 +157,71 @@ export async function requestHostGeneration(
         signal: opts.signal,
     });
 
-    const data = (await response.json()) as HostGenerateResponse;
+    const submitted = (await response.json()) as HostSubmitResponse;
 
-    if (!data.ok || !data.images?.length) {
-        throw new Error(data.error || "主站生图代理失败，请稍后重试");
+    // 提交阶段的失败（未授权 / 余额不足 / 限流 / 模型不可用）直接抛出，
+    // 这些都有明确文案，不需要轮询。
+    if (!submitted.ok || !submitted.task?.id) {
+        throw new Error(submitted.error || "主站生图代理失败，请稍后重试");
     }
 
-    return data.images.filter((img) => Boolean(img.dataUrl)).map((img) => ({ id: nanoid(), dataUrl: img.dataUrl }));
+    const statusUrl = `${proxy.generateUrl.replace(/\/+$/, "")}/${encodeURIComponent(String(submitted.task.id))}`;
+    // 生成最长可能到 RQ_JOB_TIMEOUT_SECONDS(1200s) + 上游超时，因此轮询上限给足；
+    // 真正的终止条件是任务进入 succeeded / failed，不是这个次数。
+    const maxAttempts = 480;
+    const pollIntervalMs = 2500;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        if (opts.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        await pollDelay(pollIntervalMs, opts.signal);
+
+        const statusResponse = await fetch(statusUrl, {
+            headers: { "X-Canvas-Session": proxy.token },
+            signal: opts.signal,
+            cache: "no-store",
+            credentials: "omit",
+        });
+        const state = (await statusResponse.json()) as HostStatusResponse;
+        if (!state.ok || !state.task) {
+            // 查询本身失败（会话过期等）不吞掉，直接抛出让上层提示重新打开画布。
+            if (state.error) throw new Error(state.error);
+            continue;
+        }
+
+        const status = String(state.task.status || "").toLowerCase();
+        if (status === "failed") {
+            throw new Error(state.task.error_message || "主站生图失败，请重新提交");
+        }
+        if (status !== "succeeded") continue;
+
+        // 任务成功但图读不出来（文件缺失等）时，主站会带上 images_unavailable。
+        // 这种情况**没有扣费争议**（记录已建成），但用户需要知道图拿不到。
+        if (state.images_unavailable || !state.images?.length) {
+            throw new Error("生成已完成，但结果图片读取失败，请重新生成或联系管理员");
+        }
+        return state.images.filter((img) => Boolean(img.dataUrl)).map((img) => ({ id: nanoid(), dataUrl: img.dataUrl }));
+    }
+
+    throw new Error("生成超时，请稍后重试");
+}
+
+/** 轮询等待；可被 AbortSignal 中断（画布取消生成时要能立刻退出）。 */
+function pollDelay(ms: number, signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException("Aborted", "AbortError"));
+            return;
+        }
+        const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        }, ms);
+        function onAbort() {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+        }
+        signal?.addEventListener("abort", onAbort, { once: true });
+    });
 }
 
 type HostEstimateResponse = { ok: boolean; cost?: number; billing_mode?: string; error?: string };

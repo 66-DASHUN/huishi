@@ -928,7 +928,23 @@ def _canvas_record_data_url(image_path: str) -> str:
 
 @bp.route("/api/canvas/generate", methods=("POST", "OPTIONS"))
 def canvas_generate():
-    """受主站会话保护的画布生图代理：统一用后台配置的服务商并按现有规则扣积分。"""
+    """画布生图代理（**入队**版）：建任务 -> 交给 RQ worker -> 立即返回任务号。
+
+    为什么改成队列（2026-10-10）：
+    此前这个接口在 **Web 线程里同步等上游**，而实测生图成功调用平均 22.9s、
+    最长 43.8s（provider_call_logs），gunicorn 只有 -w 2 --threads 4 共 8 个单元。
+    更要紧的是 ``get_db()`` 是每请求新建连接、请求结束才关闭（无连接池），
+    于是一次画布生成会同时占住「一个 Web 线程 + 一个数据库连接」长达 23 秒，
+    期间什么都不干。并发一上来，Web 池和连接一起被长请求吃掉。
+
+    改为入队后：接口只做校验 + 建任务 + 入队，毫秒级返回；
+    等上游的活交给 worker（4 副本），并且**自动继承**工作台那套
+    RedisGenerationLimiter（UPSTREAM_MAX_CONCURRENCY / RPM）限流。
+
+    对外协议变化：返回 ``{"ok": true, "task": {...}}`` 而非直接给 images。
+    画布前端（host-image.ts）改为轮询 ``/api/canvas/generate/<task_id>``。
+    计费语义不变：任务创建即预留，失败自动释放（上游失败免费）。
+    """
     canvas_origin, user_or_response = canvas_api_user()
     if isinstance(user_or_response, Response):
         return user_or_response
@@ -961,6 +977,8 @@ def canvas_generate():
         response.status_code = 400
         return add_canvas_cors(response, canvas_origin)
 
+    # 参考图必须**立刻落盘**：worker 在另一个进程里跑，拿不到本次请求的内存对象，
+    # 所以这一步不能推迟到 worker。
     raw_references = payload.get("references") if isinstance(payload.get("references"), list) else []
     reference_images: list[FileStorage] = []
     for item in raw_references[:CANVAS_GENERATE_MAX_REFERENCES]:
@@ -972,7 +990,7 @@ def canvas_generate():
 
     billing_resolution = _resolution_for_billing(requested_resolution)
 
-    # 检测计费模式：用户是否配置了自己的 API Key
+    # 计费模式：用户是否配置了自己的 API Key
     try:
         user_provider = get_user_provider(user_id, model=billing_model, resolution=resolution)
     except ConfigurationError as exc:
@@ -984,8 +1002,6 @@ def canvas_generate():
     if use_user_key:
         cost = 0  # Mode A：自备 Key，不扣积分
     else:
-        # Mode B：管理员 Key 池 + 积分扣费。这里只算价，真正的余额校验放到
-        # 下面的 immediate_transaction 里、持锁之后做（见那段注释）。
         try:
             cost = calculate_cost(mode, billing_resolution, count, model=billing_model)
         except ValueError as exc:
@@ -993,12 +1009,8 @@ def canvas_generate():
             response.status_code = 400
             return add_canvas_cors(response, canvas_origin)
 
-    # 单用户提交频率闸门。
-    #
-    # 为什么放在这里：画布在 Web 线程里同步等上游（实测平均 22.9s、最长 43.8s），
-    # 而 gunicorn 只有 8 个单元。工作台走 RQ + RedisGenerationLimiter 有统一闸门，
-    # 画布此前一个都没有——连点几下就能占满整个 Web 池，把其他用户一起拖住。
-    # 限流器是 Redis 支撑的滑动窗口（rate_limit_bucket），多副本下共享计数。
+    # 单用户提交频率闸门。入队后接口本身很快，但上游并发仍是稀缺资源
+    # （由 RedisGenerationLimiter 统一限流），且每单占一个 worker 槽位。
     if not rate_limit_bucket(
         current_app,
         f"canvas-generate:user:{user_id}",
@@ -1009,131 +1021,110 @@ def canvas_generate():
         response.status_code = 429
         return add_canvas_cors(response, canvas_origin)
 
-    # 廉价前置检查：已有排队/生成任务的用户直接拒掉，不必先去花上游的钱。
-    # 这不是权威校验（无锁，可能被并发穿过），权威校验在下面持锁事务里再做一次。
-    # 两处都要有：这里省成本，那里保正确。
+    saved_reference_paths: list[str] = []
+    task_id: int | None = None
     try:
-        require_active_generation_task_slot(user_id)
-    except ValueError as exc:
-        response = jsonify({"ok": False, "error": str(exc)})
-        response.status_code = 400
-        return add_canvas_cors(response, canvas_origin)
-
-    try:
-        if use_user_key:
-            result = generate_image(
-                prompt=prompt,
-                mode=mode,
-                ratio=ratio,
-                resolution=resolution,
-                count=count,
-                quality=str(payload.get("quality") or "auto"),
-                output_format="png",
-                reference_images=reference_images,
-                api_key=user_provider["api_key"],
-                base_url=user_provider["base_url"],
-                model=user_provider["model"],
-                api_format=user_provider["api_format"],
-                proxy_url=str(user_provider.get("proxy_url") or ""),
-            )
-        else:
-            result = generate_image_with_failover(
-                prompt=prompt,
-                mode=mode,
-                ratio=ratio,
-                resolution=resolution,
-                count=count,
-                quality=str(payload.get("quality") or "auto"),
-                output_format="png",
-                reference_images=reference_images,
-                model=billing_model,
-            )
-    except ConfigurationError as exc:
-        response = jsonify({"ok": False, "error": str(exc)})
-        response.status_code = 400
-        return add_canvas_cors(response, canvas_origin)
-    except (ValueError, RuntimeError, OpenAIError) as exc:
-        raw_msg = sanitize_generation_error_message(str(exc))
-        error_msg = f"您的 API Key 调用失败：{raw_msg}" if use_user_key else raw_msg
-        response = jsonify({"ok": False, "error": error_msg})
-        response.status_code = 502
-        return add_canvas_cors(response, canvas_origin)
-
-    # 先把结果读成 data URL——**必须在扣费之前**。
-    # 原先的顺序是 finalize（建记录+扣费）→ 取图，取图失败时静默跳过，
-    # 于是用户拿到 ok:true + images:[]，而积分已经扣掉。顺序调过来以后，
-    # 读不到图就整单失败，一分不扣。
-    try:
-        image_paths = list(result.get("image_paths") or [result["image_path"]])
-        images = [{"dataUrl": data_url} for data_url in _canvas_read_result_data_urls(image_paths)]
-    except (CanvasResultUnavailable, KeyError, TypeError) as exc:
-        current_app.logger.error(
-            "canvas generation produced no readable image user_id=%s error=%s", user_id, exc
-        )
-        try:
-            cleanup_local_uploads(list(result.get("image_paths") or []))
-        except Exception:
-            current_app.logger.exception("canvas cleanup after unreadable result failed")
-        response = jsonify({"ok": False, "error": "生成结果读取失败，本次未扣费，请重试"})
-        response.status_code = 500
-        return add_canvas_cors(response, canvas_origin)
-
-    try:
+        if reference_images:
+            saved_reference_paths = save_reference_images(reference_images)
         with immediate_transaction():
-            # 与工作台/音频/视频一致的顺序：先锁用户行，再校验余额与并发额度，
-            # 最后才建记录并扣费。
-            #
-            # 为什么必须加锁：画布此前是无锁预检 → 同步调上游（可能几十秒）→
-            # 才扣费。并发提交时多个请求会一起穿过预检，上游成本已经真实发生，
-            # 而扣费可能因余额被前一个请求扣光而失败回滚——这部分成本由管理员
-            # 的 Key 承担，用户没付钱却拿到了图。
-            #
-            # 为什么把扣费放在这里而不是上游之前：上游失败是**免费**的（不重试、
-            # 不扣费），所以只能"成功之后再扣"。锁保证的是"同一用户的并发请求
-            # 串行化"，先到先扣、后到者余额不足即被拒。
+            # 与工作台完全一致的顺序：锁用户行 -> 校验余额与活跃额度 -> 建任务。
             lock_user_for_update(user_id)
             if not use_user_key:
                 require_available_generation_points(user_id, cost)
             require_active_generation_task_slot(user_id)
-            result["model_source"] = billing_model
-            first_record_id = _finalize_generation(
+            task_id = create_generation_task(
                 user_id=user_id,
                 prompt=prompt,
                 mode=mode,
                 ratio=ratio,
                 resolution=resolution,
-                count=count,
+                actual_size=normalized_resolution or _resolution_for_billing(resolution),
                 quality=str(payload.get("quality") or "auto"),
                 output_format="png",
-                result=result,
-                reference_paths=[],
-                dialogue_id=None,
-                bypass_billing=use_user_key,
+                count=count,
+                cost=cost,
                 model=billing_model,
-                asset_source="canvas",
-                commit=False,
+                reference_paths=saved_reference_paths,
+                bypass_billing=use_user_key,
+                # asset_source 走 metadata：worker 侧 finalize_generation_task
+                # 需要它把记录标成 canvas（工作台视图按 asset_source 排除画布记录）。
+                metadata={"asset_source": "canvas"},
             )
     except ValueError as exc:
-        try:
-            cleanup_local_uploads(image_paths)
-        except Exception:
-            current_app.logger.exception("canvas cleanup after billing rejection failed")
+        cleanup_local_uploads(saved_reference_paths)
         response = jsonify({"ok": False, "error": str(exc)})
         response.status_code = 400
         return add_canvas_cors(response, canvas_origin)
+    except Exception:
+        cleanup_local_uploads(saved_reference_paths)
+        raise
 
-    balance_row = get_db().execute("SELECT points FROM users WHERE id = ?", (user_id,)).fetchone()
+    try:
+        enqueue_generation_task(current_app._get_current_object(), task_id, saved_reference_paths)
+    except Exception:
+        # 入队失败必须立刻释放预留，否则用户会「没拿到图却一直占着积分」。
+        current_app.logger.exception("canvas generation enqueue failed task_id=%s", task_id)
+        mark_generation_task_failed(task_id, "生成任务入队失败，请重试")
+        get_db().commit()
+        cleanup_local_uploads(saved_reference_paths)
+        response = jsonify({"ok": False, "error": "生成任务入队失败，本次未扣费，请重试"})
+        response.status_code = 503
+        return add_canvas_cors(response, canvas_origin)
+
+    task = get_generation_task_for_user(task_id, user_id)
     response = jsonify(
         {
             "ok": True,
-            "images": images,
-            "record_id": first_record_id,
+            "task": serialize_generation_task(task),
             "cost": cost,
-            "balance": int(balance_row["points"]) if balance_row else 0,
             "billing_mode": "user_key" if use_user_key else "platform",
         }
     )
+    response.status_code = 202
     return add_canvas_cors(response, canvas_origin)
+
+
+@bp.route("/api/canvas/generate/<int:task_id>", methods=("GET", "OPTIONS"))
+def canvas_generate_status(task_id: int):
+    """查询画布生图任务；成功时把结果读成 data URL 一并返回。
+
+    图片在这里读成 data URL（而不是让前端再取一次 /content），是为了保持画布
+    前端原有的数据形状，把前端改动压到最小。
+
+    取图失败时**不改任务状态**：任务本身是成功的（worker 已落记录并扣费），
+    这里只是读不到文件，返回 images_unavailable 让前端重试或提示，不去动计费。
+    """
+    canvas_origin, user_or_response = canvas_api_user()
+    if isinstance(user_or_response, Response):
+        return user_or_response
+    user_id = int(user_or_response["id"])
+
+    task = get_generation_task_for_user(task_id, user_id)
+    if task is None or str(task.get("media_type") or "image") != "image":
+        response = jsonify({"ok": False, "error": "生成任务不存在"})
+        response.status_code = 404
+        return add_canvas_cors(response, canvas_origin)
+
+    payload: dict[str, object] = {"ok": True, "task": serialize_generation_task(task)}
+    if task["status"] == "succeeded" and task.get("record_id"):
+        record = get_record_for_user(int(task["record_id"]), user_id)
+        image_paths = list(record.get("image_paths") or []) if record is not None else []
+        if not image_paths and record is not None and record.get("image_path"):
+            image_paths = [record["image_path"]]
+        try:
+            urls = _canvas_read_result_data_urls([str(item) for item in image_paths])
+        except (CanvasResultUnavailable, KeyError, TypeError) as exc:
+            current_app.logger.error(
+                "canvas result unreadable task_id=%s user_id=%s error=%s", task_id, user_id, exc
+            )
+            payload["images"] = []
+            payload["images_unavailable"] = True
+        else:
+            payload["images"] = [{"dataUrl": url} for url in urls]
+    balance_row = get_db().execute("SELECT points FROM users WHERE id = ?", (user_id,)).fetchone()
+    if balance_row is not None:
+        payload["balance"] = int(balance_row["points"])
+    return add_canvas_cors(jsonify(payload), canvas_origin)
 
 
 @bp.route("/api/canvas/estimate", methods=("GET", "POST", "OPTIONS"))
@@ -2498,7 +2489,12 @@ def _finalize_generation(
                     quality=quality,
                     output_format=output_format,
                     count=1,
-                    model_source=str(result["model_source"]),
+                    # 用 billing_model 而不是 result["model_source"]：
+                    # 前者是「用户选中的 / 计费用的」权威标识，后者是上游自报的
+                    # 标签，可能根本对不上（渠道回显、网关改名等）。
+                    # 记录里写的模型必须与计费用的模型一致，否则用户看到的
+                    # 模型名与扣费依据是两回事。
+                    model_source=billing_model,
                     elapsed_seconds=float(result["elapsed_seconds"]),
                     points_charged=per_image_cost,
                     reference_paths=reference_paths,
