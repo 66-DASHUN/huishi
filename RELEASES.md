@@ -11,14 +11,14 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:billing-hardening-20261010` |
-| `worker` | `huishi-backend:billing-hardening-20261010`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `backend` | `huishi-backend:canvas-ratelimit-20261010` |
+| `worker` | `huishi-backend:canvas-ratelimit-20261010`（4 副本，与 backend 共用镜像，仅 command 不同） |
 | `canvas` | `huishi-canvas:canvas-subpath-20261010` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-billing-hardening-20261010`
+**当前回滚目标**：`huishi-backend:rollback-canvas-ratelimit-20261010`
 
 **画布回滚目标**：`huishi-canvas:rollback-canvas-subpath-20261010`（⚠️ 见下：回滚画布镜像需同时回退 nginx）
 
@@ -41,6 +41,7 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
+| `canvas-ratelimit-20261010` | 2026-10-10 | 10 | `huishi-backend:canvas-ratelimit-20261010` | 正式 | **在跑** | 画布生图加单用户提交频率闸门（6 次 / 60 秒，`rate_limit_bucket` Redis 滑动窗口，多副本共享计数）。**为什么需要**：画布是唯一在 Web 线程里**同步等上游**的生图路径，也是唯一没有任何并发闸门的——工作台/音频/视频都走 RQ 队列并由 `RedisGenerationLimiter` 限流，画布此前只有余额与额度校验。量级取自生产埋点而非估计：`provider_call_logs` 中生图**成功调用平均 22.9s、最长 43.8s**（失败平均 1.2s），而 gunicorn 是 `-w 2 --threads 4` 共 **8 个单元**，一个用户连点几次长任务就能把 Web 池占住、其他用户全部排队。**一处自我更正**：画布绕过限流器**不会打爆上游**——8 个线程远低于 `UPSTREAM_MAX_CONCURRENCY=240`；真问题是 Web 线程被长调用占满，属容量问题、与计费无关，故与上一版分开、单独立版。限流值 6 刻意低于 8：单用户不应独占 Web 池，且正常人类操作（一次一单等结果）远达不到。⚠️ 回滚：`huishi-backend:rollback-canvas-ratelimit-20261010` |
 | `billing-hardening-20261010` | 2026-10-10 | 10 | `huishi-backend:billing-hardening-20261010` | 正式 | **在跑** | 针对「提交后没收到结果却产生扣费」的三条独立成因，外加并发与规模问题。**①顺序颠倒（主因）**：`_finalize_generation`（建记录+扣费）跑在取图之前，而 `_canvas_record_data_url` 在文件缺失时**静默返回空串**被跳过，于是返回 `{ok:true, images:[], balance:已扣}`，而画布前端 `host-image.ts:143` 对空 images 抛「主站生图代理失败」——用户看到失败、积分已扣。生产实测该路径**尚未触发**（17 条扣费记录文件全部存在），属潜在缺陷，不能当作已发生故障。改为**先读图、读不到就整单失败**（500，不扣费不建记录）。**②无锁预检 + 长期同步上游**：画布是唯一没有 `immediate_transaction + lock_user_for_update` 的写路径（工作台/音频/视频都有），并发请求会一起穿过预检、上游成本已发生而扣费可能回滚失败，差额由管理员 Key 承担。改为持锁后再校验并扣费。**③缺并发额度**：画布此前完全不调 `require_active_generation_task_slot`，现补两处（上游前廉价预检 + 锁内权威校验）。另补 4 个索引（`records`/`generation_tasks`/`point_ledger` 的 user_id 索引数此前为 **0**，而余额预留、作品列表、流水全部按 user_id 过滤；生产实测索引 37→41，`EXPLAIN` 已从 Seq Scan 变 Bitmap Index Scan），并修后台首页无 LIMIT 拉全表 `records`+`point_ledger` 只为显示 8 行的问题（新增 `limit` 取数上限）。**验证**：全量 840 passed（改动前 0 failed；注意 `HUISHI_OUTPUT_DIR` 未设时 `/app/static/uploads` 不可写会误报 203 errors）；**真实 Postgres 并发探针**：100 分/单次 30/并发 6 → 修复后 3 成功 3 拒绝、余额 10；反向对照（去锁去事务）6 全部成功、余额仍 100、流水 0，即缺陷复现。⚠️ 回滚：`huishi-backend:rollback-billing-hardening-20261010` |
 | `canvas-subpath-backend-20261010` | 2026-10-10 | 8 | `huishi-backend:canvas-subpath-backend-20261010` | 正式 | **在跑** | 画布改挂主站同域子路径的后端侧：①首页「画布」卡片改指 `/canvas`，不再整页跳到画布应用地址（那会把用户带离绘世，观感像外挂），随之删除 `__HUISHI_CANVAS_URL__` 注入与 `auth.py`/`app.py` 里为它传值的死代码；②**同源后浏览器不再发 `Origin` 头**，而 `is_allowed_canvas_origin` 原先把缺失 Origin 一律判为不可信，实测线上所有画布数据操作 403（`untrusted_origin`）。改为空 Origin 时要求请求目标主机与画布同源一致——跨站伪造仍被拦，跨源 Origin 校验路径不受影响 |
 | `canvas-subpath-20261010` | 2026-10-10 | 3 | `huishi-canvas:canvas-subpath-20261010` | 正式 | **在跑**(canvas) | 画布镜像按 `basePath=/canvas-app` 重建。Next 只自动给 `_next/*` 与 `<Link>`/router 导航加前缀，手写路径不会（读 Next 源码 `addBasePath` 调用点确认），因此逐个修正 `router.push/replace`、`fetch`、原生 `<img src>` 共 11 处，并修 `app-top-nav` 按路径判断的 `hideHeader`（加前缀后正则失配会错误显示画布顶栏）。⚠️ **回滚需同时回退 nginx**：旧镜像服务根路径、不能走子路径；本次改动前的配置在 `/root/paintiworld.conf.bak-20261010`。同时移除了 8443 的 server 块（全站已无引用，且该端口返回 404） |
