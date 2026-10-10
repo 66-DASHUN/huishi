@@ -264,3 +264,60 @@ def test_canvas_locks_user_before_checking_balance_and_slot(app, monkeypatch):
     # 前置检查在上游之前（省成本），权威结算在上游之后（拿结果才扣费）
     assert order.index("slot") < order.index("upstream"), order
     assert order.index("upstream") < order.index("lock"), order
+
+
+def test_canvas_generate_is_rate_limited_per_user(app, monkeypatch):
+    """画布生图必须有单用户提交频率闸门。
+
+    为什么需要：画布在 Web 线程里**同步等上游**（生产埋点实测生图平均 22.9s、
+    最长 43.8s），而 gunicorn 只有 `-w 2 --threads 4` 共 8 个单元。工作台走
+    RQ 队列 + RedisGenerationLimiter 有统一闸门，画布此前一个都没有——
+    一个用户连点几下就能把 Web 池占满，其他用户全部被拖住。
+
+    这里把上限设成 2、窗口 60 秒，第 3 次提交必须 429，且**不扣费、不调上游**。
+    """
+    upstream_calls = {"n": 0}
+
+    def fake_generate(**_kwargs):
+        upstream_calls["n"] += 1
+        return {
+            "image_path": "/static/uploads/rate.png",
+            "image_paths": ["/static/uploads/rate.png"],
+            "actual_size": "1024x1024",
+            "model_source": "gpt-image-2",
+            "elapsed_seconds": 0.01,
+        }
+
+    monkeypatch.setattr("huishi.routes_workspace.generate_image_with_failover", fake_generate)
+
+    def make_readable(_paths):
+        from flask import current_app
+
+        output_dir: Path = current_app.config["OUTPUT_DIR"]
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "rate.png").write_bytes(PNG_BYTES)
+        return ["data:image/png;base64,AAAA"]
+
+    monkeypatch.setattr("huishi.routes_workspace._canvas_read_result_data_urls", make_readable)
+
+    app.config["RATE_LIMITING_ENABLED"] = True
+    app.config["CANVAS_GENERATE_RATE_LIMIT"] = 2
+    app.config["CANVAS_GENERATE_RATE_WINDOW_SECONDS"] = 60
+
+    with app.app_context():
+        user_id, token = _setup_user_and_provider(points=200, username="ratelimit-user")
+
+    codes = []
+    with app.test_client() as client:
+        for _ in range(3):
+            resp = client.post(
+                "/api/canvas/generate",
+                json={"token": token, "prompt": "p", "resolution": "2K", "model": "gpt-image-2"},
+                headers={"Origin": "http://127.0.0.1:3000"},
+            )
+            codes.append(resp.status_code)
+
+    assert codes[:2] == [200, 200], codes
+    assert codes[2] == 429, codes
+    # 被限流的那次不得消耗上游成本
+    assert upstream_calls["n"] == 2, upstream_calls

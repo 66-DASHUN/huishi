@@ -53,6 +53,7 @@ from huishi.canvas_projects import (
     update_canvas_project,
 )
 from huishi.db import get_db, immediate_transaction, lock_user_for_update, sql_placeholders, transaction, utc_now
+from huishi.rate_limits import rate_limit_bucket
 from huishi.generation_queue import enqueue_generation_task
 from huishi.image_api import (
     ConfigurationError,
@@ -991,6 +992,22 @@ def canvas_generate():
             response = jsonify({"ok": False, "error": str(exc)})
             response.status_code = 400
             return add_canvas_cors(response, canvas_origin)
+
+    # 单用户提交频率闸门。
+    #
+    # 为什么放在这里：画布在 Web 线程里同步等上游（实测平均 22.9s、最长 43.8s），
+    # 而 gunicorn 只有 8 个单元。工作台走 RQ + RedisGenerationLimiter 有统一闸门，
+    # 画布此前一个都没有——连点几下就能占满整个 Web 池，把其他用户一起拖住。
+    # 限流器是 Redis 支撑的滑动窗口（rate_limit_bucket），多副本下共享计数。
+    if not rate_limit_bucket(
+        current_app,
+        f"canvas-generate:user:{user_id}",
+        int(current_app.config.get("CANVAS_GENERATE_RATE_LIMIT", 6)),
+        int(current_app.config.get("CANVAS_GENERATE_RATE_WINDOW_SECONDS", 60)),
+    ):
+        response = jsonify({"ok": False, "error": "提交过于频繁，请等待当前生成完成后再试"})
+        response.status_code = 429
+        return add_canvas_cors(response, canvas_origin)
 
     # 廉价前置检查：已有排队/生成任务的用户直接拒掉，不必先去花上游的钱。
     # 这不是权威校验（无锁，可能被并发穿过），权威校验在下面持锁事务里再做一次。

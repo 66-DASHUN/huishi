@@ -126,6 +126,20 @@ class Config:
     CANVAS_APP_URL = os.environ.get("HUISHI_CANVAS_APP_URL", "http://127.0.0.1:3000")
     # 主站签发给画布的短时会话 token TTL，单位秒。
     CANVAS_SESSION_TTL_SECONDS = int(os.environ.get("HUISHI_CANVAS_SESSION_TTL_SECONDS", "86400"))
+    # 画布生图的单用户提交频率上限（次 / 窗口秒）。
+    #
+    # 为什么需要：画布是**在 Web 线程里同步等上游**的（实测生图平均 22.9s、
+    # 最长 43.8s，见 provider_call_logs），而 gunicorn 只有 -w 2 --threads 4
+    # 共 8 个单元。工作台那条路径把生成丢进 RQ 队列、由 RedisGenerationLimiter
+    # 统一限流（UPSTREAM_MAX_CONCURRENCY/RPM），画布则完全没有闸门——
+    # 一个用户连点几下就能把 8 个 Web 单元全部占住，其他用户一律排队。
+    #
+    # 取值低于 8：单用户最多占满 Web 池，不应独占。这是**保护性**上限，
+    # 正常人类操作（一次一单、等结果）远达不到。
+    CANVAS_GENERATE_RATE_LIMIT = int(os.environ.get("HUISHI_CANVAS_GENERATE_RATE_LIMIT", "6"))
+    CANVAS_GENERATE_RATE_WINDOW_SECONDS = int(
+        os.environ.get("HUISHI_CANVAS_GENERATE_RATE_WINDOW_SECONDS", "60")
+    )
 
     # --- SMTP email ---
     # SMTP 服务器地址。
