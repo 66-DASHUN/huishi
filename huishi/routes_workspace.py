@@ -879,6 +879,34 @@ def _read_canvas_data_url_reference(data_url: str) -> FileStorage | None:
     )
 
 
+def _canvas_read_result_data_urls(image_paths: list[str]) -> list[str]:
+    """把生成结果读成 data URL，读不到就抛错——**绝不静默返回空**。
+
+    为什么要有这个函数：``_canvas_record_data_url`` 读不到文件时返回空字符串，
+    而调用方历史上是"跳过空值继续往下走"。于是流程变成
+    ``先扣费(finalize) → 再取图(可能为空) → 返回 ok:true + images:[]``，
+    用户看到前端那句"主站生图代理失败，请稍后重试"，积分却已经扣掉了。
+
+    现在把读取**提到扣费之前**，并且读不全就整单失败。这样失败时用户没被扣费，
+    记录也不会建（无记录的图由 storage sweep 当孤儿回收）。
+    """
+    urls: list[str] = []
+    for image_path in image_paths:
+        data_url = _canvas_record_data_url(str(image_path))
+        if not data_url:
+            raise CanvasResultUnavailable(
+                f"生成结果文件不可读：{image_path}"
+            )
+        urls.append(data_url)
+    if not urls:
+        raise CanvasResultUnavailable("本次生成没有产生任何图片结果")
+    return urls
+
+
+class CanvasResultUnavailable(RuntimeError):
+    """结果已生成但读不出来（文件缺失/存储故障）。这类失败不该扣费。"""
+
+
 def _canvas_record_data_url(image_path: str) -> str:
     prefix = "/static/uploads/"
     if not image_path.startswith(prefix):
@@ -888,6 +916,10 @@ def _canvas_record_data_url(image_path: str) -> str:
             Path(image_path.removeprefix(prefix)).name
         )
     except (FileNotFoundError, ValueError):
+        # 这里返回空是历史行为，保留给"文件可能确实不存在"的探测场景；
+        # 但生成结果路径必须改用 _canvas_read_result_data_urls，那里会抛错，
+        # 以免出现"扣了费却没有图"。
+        current_app.logger.warning("canvas result image unreadable path=%s", image_path)
         return ""
     mime_type = mimetypes.guess_type(local_path.name)[0] or "image/png"
     return f"data:{mime_type};base64,{base64.b64encode(local_path.read_bytes()).decode('ascii')}"
@@ -951,14 +983,24 @@ def canvas_generate():
     if use_user_key:
         cost = 0  # Mode A：自备 Key，不扣积分
     else:
-        # Mode B：管理员 Key 池 + 积分扣费
+        # Mode B：管理员 Key 池 + 积分扣费。这里只算价，真正的余额校验放到
+        # 下面的 immediate_transaction 里、持锁之后做（见那段注释）。
         try:
             cost = calculate_cost(mode, billing_resolution, count, model=billing_model)
-            require_available_generation_points(user_id, cost)
         except ValueError as exc:
             response = jsonify({"ok": False, "error": str(exc)})
             response.status_code = 400
             return add_canvas_cors(response, canvas_origin)
+
+    # 廉价前置检查：已有排队/生成任务的用户直接拒掉，不必先去花上游的钱。
+    # 这不是权威校验（无锁，可能被并发穿过），权威校验在下面持锁事务里再做一次。
+    # 两处都要有：这里省成本，那里保正确。
+    try:
+        require_active_generation_task_slot(user_id)
+    except ValueError as exc:
+        response = jsonify({"ok": False, "error": str(exc)})
+        response.status_code = 400
+        return add_canvas_cors(response, canvas_origin)
 
     try:
         if use_user_key:
@@ -1000,35 +1042,69 @@ def canvas_generate():
         response.status_code = 502
         return add_canvas_cors(response, canvas_origin)
 
+    # 先把结果读成 data URL——**必须在扣费之前**。
+    # 原先的顺序是 finalize（建记录+扣费）→ 取图，取图失败时静默跳过，
+    # 于是用户拿到 ok:true + images:[]，而积分已经扣掉。顺序调过来以后，
+    # 读不到图就整单失败，一分不扣。
     try:
-        result["model_source"] = billing_model
-        first_record_id = _finalize_generation(
-            user_id=user_id,
-            prompt=prompt,
-            mode=mode,
-            ratio=ratio,
-            resolution=resolution,
-            count=count,
-            quality=str(payload.get("quality") or "auto"),
-            output_format="png",
-            result=result,
-            reference_paths=[],
-            dialogue_id=None,
-            bypass_billing=use_user_key,
-            model=billing_model,
-            asset_source="canvas",
+        image_paths = list(result.get("image_paths") or [result["image_path"]])
+        images = [{"dataUrl": data_url} for data_url in _canvas_read_result_data_urls(image_paths)]
+    except (CanvasResultUnavailable, KeyError, TypeError) as exc:
+        current_app.logger.error(
+            "canvas generation produced no readable image user_id=%s error=%s", user_id, exc
         )
+        try:
+            cleanup_local_uploads(list(result.get("image_paths") or []))
+        except Exception:
+            current_app.logger.exception("canvas cleanup after unreadable result failed")
+        response = jsonify({"ok": False, "error": "生成结果读取失败，本次未扣费，请重试"})
+        response.status_code = 500
+        return add_canvas_cors(response, canvas_origin)
+
+    try:
+        with immediate_transaction():
+            # 与工作台/音频/视频一致的顺序：先锁用户行，再校验余额与并发额度，
+            # 最后才建记录并扣费。
+            #
+            # 为什么必须加锁：画布此前是无锁预检 → 同步调上游（可能几十秒）→
+            # 才扣费。并发提交时多个请求会一起穿过预检，上游成本已经真实发生，
+            # 而扣费可能因余额被前一个请求扣光而失败回滚——这部分成本由管理员
+            # 的 Key 承担，用户没付钱却拿到了图。
+            #
+            # 为什么把扣费放在这里而不是上游之前：上游失败是**免费**的（不重试、
+            # 不扣费），所以只能"成功之后再扣"。锁保证的是"同一用户的并发请求
+            # 串行化"，先到先扣、后到者余额不足即被拒。
+            lock_user_for_update(user_id)
+            if not use_user_key:
+                require_available_generation_points(user_id, cost)
+            require_active_generation_task_slot(user_id)
+            result["model_source"] = billing_model
+            first_record_id = _finalize_generation(
+                user_id=user_id,
+                prompt=prompt,
+                mode=mode,
+                ratio=ratio,
+                resolution=resolution,
+                count=count,
+                quality=str(payload.get("quality") or "auto"),
+                output_format="png",
+                result=result,
+                reference_paths=[],
+                dialogue_id=None,
+                bypass_billing=use_user_key,
+                model=billing_model,
+                asset_source="canvas",
+                commit=False,
+            )
     except ValueError as exc:
+        try:
+            cleanup_local_uploads(image_paths)
+        except Exception:
+            current_app.logger.exception("canvas cleanup after billing rejection failed")
         response = jsonify({"ok": False, "error": str(exc)})
         response.status_code = 400
         return add_canvas_cors(response, canvas_origin)
 
-    image_paths = list(result.get("image_paths") or [result["image_path"]])
-    images = []
-    for image_path in image_paths:
-        data_url = _canvas_record_data_url(str(image_path))
-        if data_url:
-            images.append({"dataUrl": data_url})
     balance_row = get_db().execute("SELECT points FROM users WHERE id = ?", (user_id,)).fetchone()
     response = jsonify(
         {

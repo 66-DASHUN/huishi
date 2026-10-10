@@ -290,6 +290,22 @@ CREATE TABLE IF NOT EXISTS canvas_project_assets (
 
 CREATE INDEX IF NOT EXISTS idx_canvas_project_assets_ref
 ON canvas_project_assets(asset_ref);
+
+-- 余额预留：reserved_generation_points 按 (user_id, status) 求和，
+-- 每次提交生成、每次工作台列表刷新都会走到。
+CREATE INDEX IF NOT EXISTS idx_generation_tasks_user_status
+ON generation_tasks(user_id, status);
+
+-- 我的作品/画布素材库：按 user_id 过滤 + 时间倒序。
+CREATE INDEX IF NOT EXISTS idx_records_user_created
+ON records(user_id, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_records_user_hidden
+ON records(user_id, hidden);
+
+-- 积分流水页：按 user_id 过滤 + 时间倒序。
+CREATE INDEX IF NOT EXISTS idx_point_ledger_user_created
+ON point_ledger(user_id, id DESC);
 """
 
 

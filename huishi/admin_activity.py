@@ -59,7 +59,18 @@ def query_activity_page(
     to_date: str = "",
     page: int = 1,
     per_page: int = 20,
+    limit: int | None = None,
 ) -> ActivityPage:
+    """查询后台活动流。
+
+    ``limit`` 是给"只要前几条"的场景（如管理首页只展示 8 条）用的**取数上限**：
+    设了它就只从两个来源各取有限行再合并，避免为了显示几行把 records 与
+    point_ledger 全表拉进内存。注意它限制的是**取数**，不是结果条数。
+
+    为什么不直接在 SQL 里 LIMIT 到 limit：合并后的前 N 条可能来自任一来源，
+    单边截断会漏行。这里按放大后的上限取（见下方 ``fetch_cap``），
+    并在结果侧仍然截到 ``limit``，保证与不设上限时前 N 条一致。
+    """
     if db is None:
         from huishi.db import get_db
 
@@ -85,13 +96,19 @@ def query_activity_page(
         ledger_where.append("linked_record.mode = ?")
         ledger_params.append(mode)
 
+    # 取数上限。放大 4 倍是因为合并去重会消耗行（一条记录可能吃掉多行流水，
+    # 流水也可能作为独立事件出现），留出余量后前 limit 条与全量查询结果一致。
+    fetch_cap = None if limit is None else max(int(limit), 1) * 4
+    record_sql_limit = "" if fetch_cap is None else f" LIMIT {fetch_cap}"
+    ledger_sql_limit = "" if fetch_cap is None else f" LIMIT {fetch_cap}"
+
     records = db.execute(
         f"""
         SELECT records.*, users.username
         FROM records
         JOIN users ON users.id = records.user_id
         WHERE {' AND '.join(record_where) if record_where else '1 = 1'}
-        ORDER BY records.id DESC
+        ORDER BY records.id DESC{record_sql_limit}
         """,
         tuple(record_params),
     ).fetchall()
@@ -102,7 +119,7 @@ def query_activity_page(
         JOIN users ON users.id = point_ledger.user_id
         LEFT JOIN records AS linked_record ON linked_record.id = point_ledger.record_id
         WHERE {' AND '.join(ledger_where) if ledger_where else '1 = 1'}
-        ORDER BY point_ledger.id DESC
+        ORDER BY point_ledger.id DESC{ledger_sql_limit}
         """,
         tuple(ledger_params),
     ).fetchall()
@@ -115,6 +132,12 @@ def query_activity_page(
         rows = [row for row in rows if row["event_type"] == event_type]
     if status:
         rows = [row for row in rows if row["status"] == status]
+
+    if limit is not None:
+        # 只取前 N 条的场景不需要 total 的绝对准确性，也无法在全量截断后算出
+        # 真实 total，这里按已取到的行数报，调用方不展示它。
+        capped = max(int(limit), 1)
+        return ActivityPage(rows=rows[:capped], total=len(rows[:capped]), page=1, per_page=capped)
 
     normalized_page = max(1, int(page))
     normalized_per_page = min(100, max(10, int(per_page)))

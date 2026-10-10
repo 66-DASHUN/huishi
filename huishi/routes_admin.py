@@ -140,7 +140,9 @@ def index():
         "record_count": db.execute("SELECT COUNT(*) AS value FROM records").fetchone()["value"],
         "points_charged": db.execute("SELECT COALESCE(SUM(points_charged), 0) AS value FROM records").fetchone()["value"],
     }
-    recent_activity = query_activity_page(db=db, page=1, per_page=10).rows[:8]
+    # limit 只取数据、不做全表扫描：首页要 8 条，就不该把 records 与
+    # point_ledger 全表拉进内存再切片（此前正是如此）。
+    recent_activity = query_activity_page(db=db, page=1, per_page=10, limit=8).rows
     return render_template(
         "admin/dashboard.html",
         stats=stats,
