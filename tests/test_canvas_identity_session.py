@@ -315,6 +315,20 @@ def test_canvas_origin_alias_helper_accepts_localhost_and_loopback():
     assert is_allowed_canvas_origin("http://127.0.0.1:3000", "http://localhost:3000")
     assert not is_allowed_canvas_origin("http://localhost:3001", "http://127.0.0.1:3000")
 
+    # ---- 同源请求（无 Origin）的边界 ----
+    # 画布挂到主站同域子路径后，浏览器对同源请求不再发 Origin；此时只能靠
+    # 请求自身的目标主机来判断来源，必须要求它与画布同源。
+    canvas = "https://paintiworld.dashun9527.com"
+    assert is_allowed_canvas_origin("", canvas, "https://paintiworld.dashun9527.com/")
+    assert is_allowed_canvas_origin("", canvas, "https://paintiworld.dashun9527.com/canvas-app")
+    # 目标主机不是画布同源 -> 拒（否则任何无 Origin 的请求都能进）
+    assert not is_allowed_canvas_origin("", canvas, "https://evil.example.com/")
+    assert not is_allowed_canvas_origin("", canvas, "")
+    # 跨源 Origin 仍然被拦，不受本次放宽影响
+    assert not is_allowed_canvas_origin("https://evil.example.com", canvas, "https://paintiworld.dashun9527.com/")
+    # 画布地址未配置时一律拒绝
+    assert not is_allowed_canvas_origin("", "", "https://paintiworld.dashun9527.com/")
+
 
 def test_canvas_assets_library_endpoint_returns_host_assets(app):
     from huishi.canvas_session import issue_canvas_session_token

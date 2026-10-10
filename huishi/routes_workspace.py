@@ -418,9 +418,31 @@ def configured_canvas_origin(canvas_app_url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def is_allowed_canvas_origin(request_origin: str, canvas_origin: str) -> bool:
-    if not request_origin or not canvas_origin:
+def is_allowed_canvas_origin(
+    request_origin: str,
+    canvas_origin: str,
+    request_host_origin: str = "",
+) -> bool:
+    """判断这个请求的 Origin 可信吗。
+
+    ``request_origin`` 为空表示**同源**请求：浏览器的 Fetch 规范只对跨源请求
+    发送 Origin 头，同源请求通常不带（GET 一定不带）。画布挂在主站同域子路径
+    下之后，它调用主站 API 正是这种情况——此前把"没有 Origin"一律当成不可信，
+    会让画布的所有数据操作 403。
+
+    但空 Origin 不能无条件放行：那种情况下唯一还能说明来源的是请求自身的
+    目标主机。所以要求 ``request_host_origin``（调用方传 ``request.host_url``）
+    与画布同源一致。跨站伪造的请求 URL 报的是主站域名，不会被误判。
+
+    这仍然不是鉴权本身——真正的凭证是 ``X-Canvas-Session`` 里的会话令牌，
+    那一步照常校验。这里只是把"跨站被拦、同站放行"的边界画准。
+    """
+    if not canvas_origin:
         return False
+    if not request_origin:
+        if not request_host_origin:
+            return False
+        return configured_canvas_origin(request_host_origin) == canvas_origin
     if request_origin == canvas_origin:
         return True
     request_parsed = urlsplit(request_origin)
@@ -542,7 +564,7 @@ def canvas_api_user():
         return canvas_origin, add_canvas_cors(current_app.response_class("", status=204), canvas_origin)
 
     request_origin = request.headers.get("Origin", "")
-    if not is_allowed_canvas_origin(request_origin, canvas_origin):
+    if not is_allowed_canvas_origin(request_origin, canvas_origin, request.host_url):
         response = jsonify({"ok": False, "error": "untrusted_origin"})
         response.status_code = 403
         return canvas_origin, add_canvas_cors(response, canvas_origin)
@@ -1031,7 +1053,7 @@ def canvas_estimate():
         return add_canvas_cors(current_app.response_class("", status=204), canvas_origin)
 
     request_origin = request.headers.get("Origin", "")
-    if not is_allowed_canvas_origin(request_origin, canvas_origin):
+    if not is_allowed_canvas_origin(request_origin, canvas_origin, request.host_url):
         response = jsonify({"ok": False, "error": "untrusted_origin"})
         response.status_code = 403
         return add_canvas_cors(response, canvas_origin)
