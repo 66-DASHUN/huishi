@@ -11,14 +11,16 @@
 
 | 服务 | 运行镜像 |
 |---|---|
-| `backend` | `huishi-backend:font-mime-20261008` |
-| `worker` | `huishi-backend:font-mime-20261008`（4 副本，与 backend 共用镜像，仅 command 不同） |
-| `canvas` | `huishi-canvas:canvas-perf-20261008` |
+| `backend` | `huishi-backend:canvas-subpath-backend-20261010` |
+| `worker` | `huishi-backend:canvas-subpath-backend-20261010`（4 副本，与 backend 共用镜像，仅 command 不同） |
+| `canvas` | `huishi-canvas:canvas-subpath-20261010` |
 | `canvas-agent` | `huishi-canvas-agent:latest` |
 | `postgres` | `postgres:16-alpine` |
 | `redis` | `redis:7-alpine` |
 
-**当前回滚目标**：`huishi-backend:rollback-font-mime-20261008`
+**当前回滚目标**：`huishi-backend:rollback-canvas-subpath-backend-20261010`
+
+**画布回滚目标**：`huishi-canvas:rollback-canvas-subpath-20261010`（⚠️ 见下：回滚画布镜像需同时回退 nginx）
 
 ## 版本类型约定
 
@@ -39,8 +41,10 @@
 
 | release | 日期 | 文件数 | 目标镜像 | kind | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| `canvas-perf-20261008` | 2026-10-08 | 3 | `huishi-canvas:canvas-perf-20261008` | 正式 | **在跑**(canvas) | 画布镜像重建，落地移除 pro-components 的改动。⚠️ **目录不完整**：只有两个 compose + manifest，无 Dockerfile/脚本——画布不走上层分层的后端发布路径，而是由 `compose.prod.yml` 的 `context: infinite-canvas` + `Dockerfile.huishi` 就地构建，故沿用 `token-fragment-20261005` 的形态。回滚 tag 为 `huishi-canvas:rollback-canvas-perf-20261008`。附带的锁文件修正还清掉了只被 pro-components 依赖的 270 行孤立条目（@dnd-kit/*、rc-field-form、lodash-es 等） |
-| `font-mime-20261008` | 2026-10-08 | 8 | `huishi-backend:font-mime-20261008` | 正式 | **在跑** | 给 .woff2/.woff 注册正确的 Content-Type。python:3.12-slim 里没有 /etc/mime.types，mimetypes 不认识 woff2，Flask 把字体当 `application/octet-stream` 送出——这是随「字体搬到站内」一起进来的，此前字体由 Cloudflare 边缘提供、类型天然正确。风险边界如实说：主流浏览器不会因此拒绝加载（nosniff 的 MIME 强制针对脚本与样式表），所以不是线上故障，而是响应头说了谎。测试用**子进程**验证，因为 `mimetypes.add_type` 改的是模块级全局表，在测试进程里调一次就永久生效——我最初那版测试去掉修复后依然全绿，等于没测；改为子进程并做过反证后才可信 |
+| `canvas-subpath-backend-20261010` | 2026-10-10 | 8 | `huishi-backend:canvas-subpath-backend-20261010` | 正式 | **在跑** | 画布改挂主站同域子路径的后端侧：①首页「画布」卡片改指 `/canvas`，不再整页跳到画布应用地址（那会把用户带离绘世，观感像外挂），随之删除 `__HUISHI_CANVAS_URL__` 注入与 `auth.py`/`app.py` 里为它传值的死代码；②**同源后浏览器不再发 `Origin` 头**，而 `is_allowed_canvas_origin` 原先把缺失 Origin 一律判为不可信，实测线上所有画布数据操作 403（`untrusted_origin`）。改为空 Origin 时要求请求目标主机与画布同源一致——跨站伪造仍被拦，跨源 Origin 校验路径不受影响 |
+| `canvas-subpath-20261010` | 2026-10-10 | 3 | `huishi-canvas:canvas-subpath-20261010` | 正式 | **在跑**(canvas) | 画布镜像按 `basePath=/canvas-app` 重建。Next 只自动给 `_next/*` 与 `<Link>`/router 导航加前缀，手写路径不会（读 Next 源码 `addBasePath` 调用点确认），因此逐个修正 `router.push/replace`、`fetch`、原生 `<img src>` 共 11 处，并修 `app-top-nav` 按路径判断的 `hideHeader`（加前缀后正则失配会错误显示画布顶栏）。⚠️ **回滚需同时回退 nginx**：旧镜像服务根路径、不能走子路径；本次改动前的配置在 `/root/paintiworld.conf.bak-20261010`。同时移除了 8443 的 server 块（全站已无引用，且该端口返回 404） |
+| `canvas-perf-20261008` | 2026-10-08 | 3 | `huishi-canvas:canvas-perf-20261008` | 正式 | 已被取代 | 画布镜像重建，落地移除 pro-components 的改动。⚠️ **目录不完整**：只有两个 compose + manifest，无 Dockerfile/脚本——画布不走上层分层的后端发布路径，而是由 `compose.prod.yml` 的 `context: infinite-canvas` + `Dockerfile.huishi` 就地构建，故沿用 `token-fragment-20261005` 的形态。回滚 tag 为 `huishi-canvas:rollback-canvas-perf-20261008`。附带的锁文件修正还清掉了只被 pro-components 依赖的 270 行孤立条目（@dnd-kit/*、rc-field-form、lodash-es 等） |
+| `font-mime-20261008` | 2026-10-08 | 8 | `huishi-backend:font-mime-20261008` | 正式 | 已被取代 | 给 .woff2/.woff 注册正确的 Content-Type。python:3.12-slim 里没有 /etc/mime.types，mimetypes 不认识 woff2，Flask 把字体当 `application/octet-stream` 送出——这是随「字体搬到站内」一起进来的，此前字体由 Cloudflare 边缘提供、类型天然正确。风险边界如实说：主流浏览器不会因此拒绝加载（nosniff 的 MIME 强制针对脚本与样式表），所以不是线上故障，而是响应头说了谎。测试用**子进程**验证，因为 `mimetypes.add_type` 改的是模块级全局表，在测试进程里调一次就永久生效——我最初那版测试去掉修复后依然全绿，等于没测；改为子进程并做过反证后才可信 |
 | `fonts-canvas-perf-20261008` | 2026-10-08 | 8 | `huishi-backend:fonts-canvas-perf-20261008` | 正式 | 已被取代 | 字体自托管，消掉 Cloudflare 往每个 HTML 里内联的 46 万字节。实测注入是 505 条 @font-face、461,774 字节（raw），`/workspace` 因此从 464,938 掉到 **3,214 字节**，每次导航的传输量从 36,475 降到 **1,387**（br）。做法：202 个 woff2 子集放 `static/fonts/`，权重写成范围形式（这批是可变字体，一个文件覆盖整条 wght 轴，写成单值会静默退回单字重），保留 unicode-range 让浏览器只下命中的 3-8 片。另含画布移除仅为 `dark` 一个布尔引入的 pro-components（首屏 gzip −31,258，−5.9%）。**注意**：字体进 git 共 10,531,532 字节 |
 | `mention-preamble-20261008` | 2026-10-08 | 8 | `huishi-backend:mention-preamble-20261008` | 正式 | 已被取代 | 图片模式的 @ 引用**真正生效**：此前 `@文件名` 只是原样送上游的一段纯文本，上游既不知道它指向第几张图、也没有位置对应关系，等于装饰。现在在唯一的出图咽喉点（队列/工作台/作品重生成/测试连接四条路径共用）插入编号前言：「参考图片共 N 张，按提交顺序编号 …… 第1张=产品主图.png」，顺带把 `secure_filename` 吃掉中文名（`天鹤司命分镜42.png`→`42.png`）导致按名反查位置不可靠的问题一并绕开——编号依据是**真实提交顺序**而非 @ 的出现顺序。已用补丁 OpenAI 客户端的方式抓到真实上游 kwargs，确认前言随请求发出 |
 | `image-mode-mention-20261008` | 2026-10-08 | 8 | `huishi-backend:image-mode-mention-20261008` | 正式 | 已被取代 | 图片模式也支持 @ 引用参考图：此前 @ 只在视频模式可用（函数开头就按媒体类型早退），而参考图恰是图片模式最常用的输入。改动含候选入口与媒体解耦、锚点按模式回落、点击不误写视频状态、措辞分模式、切换类型重新同步。附 `tests/check_workspace_mention.cjs`（node，8 组）用 DOM 桩执行真实分支 |
