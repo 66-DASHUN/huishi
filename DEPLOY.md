@@ -27,22 +27,29 @@
 | `postgres` | `postgres:16-alpine` | 仅内部 | `pg_isready` |
 | `redis` | `redis:7-alpine` | 仅内部 | `redis-cli ping` |
 | `backend` | `huishi-backend:<release>` | `127.0.0.1:18000 → 8000` | HTTP `/` |
-| `worker` | `huishi-worker:<release>` | 无 | **无**（见 §5） |
+| `worker-image` / `worker-video` | `huishi-worker:<release>` | 无 | **无**（见 §5） |
 | `canvas` | `huishi-canvas:<release>` | `127.0.0.1:13000 → 3000` | HTTP `/` |
 | `canvas-agent` | 构建自 `infinite-canvas/canvas-agent` | 仅内部 `17371` | HTTP `/health` |
 
-`backend` 与 `worker` **共用同一个 Dockerfile**（`deploy/container/backend.Dockerfile`），
-仅靠 `command` 区分：backend 跑 gunicorn，worker 跑 `python worker.py`。
+`backend` 与两个 worker 服务**共用同一个 Dockerfile**（`deploy/container/backend.Dockerfile`），
+仅靠 `command` 区分：backend 跑 gunicorn，worker 跑 `python worker_supervisor.py <image|video>`。
 
 ---
 
 ## 2. 关键约束（务必先读）
 
-1. **worker 必须保持 4 个副本。**
-   `compose.prod.yml` 里 `worker` 没有声明副本数，线上 4 个 worker 是
-   `--scale worker=4` 拉起来的。**任何不带 `--scale worker=4` 的
-   `docker compose up -d` 都会把 worker 打回 1 个。**
-   `releases/*/deploy.sh` 里的每一处 worker 启动都带了这个参数，不要改掉。
+1. **两个 worker 服务各保持 1 个副本，不要 `--scale`。**
+   worker 已拆成 `worker-image`（图片/音频）与 `worker-video`（视频）两个服务，
+   每个固定 1 个副本。**并发在容器内部**：`worker_supervisor.py` 按配置拉起
+   N 个子进程、每个进程内 M 个线程，并发上限 = N × M。
+
+   调并发改环境变量即可，**不要加容器**：
+   ```
+   HUISHI_GENERATION_IMAGE_PROCESSES=8   HUISHI_GENERATION_IMAGE_THREADS=32
+   HUISHI_GENERATION_VIDEO_PROCESSES=2   HUISHI_GENERATION_VIDEO_THREADS=8
+   ```
+   ⚠️ **给这两个服务 `--scale` 会让并发数翻倍**，进而打爆 Postgres 的
+   连接上限（默认 100）。`releases/*/deploy.sh` 因此显式校验"恰好 1 个副本"。
 
 2. **基础 compose 文件里四个构建服务都没有 `image:` 标签。**
    这是**有意的分层设计**：基线 `compose.prod.yml` 只定义「怎么构建」，
@@ -115,7 +122,7 @@ bash releases/<release-name>/deploy.sh
 - `trap rollback_release ERR` —— 任何一步失败自动切回 `compose.rollback.yml`
 - `--no-deps` —— **只动目标服务**，不连带重启 postgres/redis
 - `--wait` —— 等健康检查通过才算成功
-- `--scale worker=4` —— 保住 worker 副本数
+- worker 两个服务各 1 个副本 —— **不要 `--scale`**（并发在进程内部）
 
 ### 3.3 回滚
 

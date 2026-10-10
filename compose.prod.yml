@@ -63,12 +63,39 @@ services:
     networks:
       - huishi-internal
 
-  worker:
+  # 生图/音频队列。并发上限 = GENERATION_IMAGE_PROCESSES × _THREADS，
+  # 由 worker_supervisor.py 在容器内拉起 N 个子进程、每个进程 M 个线程。
+  # **调并发只改环境变量，不要加容器**——RQ 一进程只能跑一个任务，
+  # 靠加容器提到 256 并发意味着 256 个容器。
+  worker-image:
     build:
       context: .
       dockerfile: deploy/container/backend.Dockerfile
     restart: unless-stopped
-    command: ["python", "worker.py"]
+    command: ["python", "worker_supervisor.py", "image"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://huishi:${POSTGRES_PASSWORD}@postgres:5432/huishi_prod
+      HUISHI_DATABASE: /var/lib/huishi/huishi.sqlite3
+      HUISHI_REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./data/uploads:/var/lib/huishi/uploads
+      - logs:/var/log/huishi
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - huishi-internal
+
+  # 视频队列。独立于图片队列：视频单条最长占用槽位 20 分钟（轮询上游），
+  # 图片只要几十秒，同队列时几条视频就能把图片生成的槽位全部占满。
+  worker-video:
+    build:
+      context: .
+      dockerfile: deploy/container/backend.Dockerfile
+    restart: unless-stopped
+    command: ["python", "worker_supervisor.py", "video"]
     env_file:
       - .env
     environment:

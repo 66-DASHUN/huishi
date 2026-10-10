@@ -7,8 +7,11 @@
 # 而不是留在文档里等人踩：
 #   1. 四个构建服务在 compose.prod.yml 里都没有 image:，直接 up -d 会回退到
 #      历史遗留的 :latest，让线上代码静默回退数周。→ 强制叠加 compose.release.yml
-#   2. 不带 --scale worker=4 会把 worker 打回 1 个；服务名意外展开为空时
-#      compose 会拉起整个项目。→ 显式写服务名并校验副本数
+#   2. 服务名意外展开为空时 compose 会拉起整个项目。
+#      → 显式写服务名并校验副本数
+#      注：worker 已拆成 worker-image / worker-video，两者都**必须恰好 1 个副本**
+#      ——并发在进程内部（worker_supervisor.py 起 N 进程 × M 线程），
+#      多副本会让并发数翻倍并打爆 Postgres 连接数。
 #   3. 画布 Dockerfile 用了 BuildKit 专属的 --mount=type=cache，需要
 #      docker-buildx 且 DOCKER_BUILDKIT=1。→ 构建前探测
 set -euo pipefail
@@ -21,7 +24,7 @@ release="$root/releases/$RELEASE_NAME"
 release_compose="$release/compose.release.yml"
 rollback_compose="$release/compose.rollback.yml"
 
-services=(backend worker)
+services=(backend worker-image worker-video)
 
 fail() { echo "[deploy] $*" >&2; exit 1; }
 
@@ -87,7 +90,8 @@ rollback_release() {
   trap - ERR
   printf '[deploy] 失败(status %s)，执行回滚\n' "$status" >&2
   docker compose -f "$base" -f "$rollback_compose" up -d --no-deps --wait backend || true
-  docker compose -f "$base" -f "$rollback_compose" up -d --no-deps --scale worker=4 worker || true
+  docker compose -f "$base" -f "$rollback_compose" up -d --no-deps worker-image || true
+  docker compose -f "$base" -f "$rollback_compose" up -d --no-deps worker-video || true
   exit "$status"
 }
 trap rollback_release ERR
@@ -95,17 +99,20 @@ trap rollback_release ERR
 # ---------- 构建与发布 ----------
 docker build -f "$release/Dockerfile.backend" -t "huishi-backend:${RELEASE_NAME}" "$release"
 
-# 陷阱 2：显式写服务名 + --no-deps（不连带重启 postgres/redis），
-# worker 必须显式 --scale worker=4。
+# 陷阱 2：显式写服务名 + --no-deps（不连带重启 postgres/redis）。
+# 注意：worker 两个服务都**不加 --scale**——并发在进程内部，多副本会翻倍。
 docker compose -f "$base" -f "$release_compose" up -d --no-deps --wait backend
-docker compose -f "$base" -f "$release_compose" up -d --no-deps --scale worker=4 worker
+docker compose -f "$base" -f "$release_compose" up -d --no-deps worker-image
+docker compose -f "$base" -f "$release_compose" up -d --no-deps worker-video
 
-# 校验副本数，防止 worker 被打回 1 个却没察觉。
-running_workers=$(docker compose -f "$base" -f "$release_compose" ps -q worker | wc -l)
-[ "$running_workers" -eq 4 ] || fail "worker 副本数为 $running_workers，期望 4"
+# 校验每个 worker 服务恰好 1 个副本（多于 1 会让并发数翻倍、打爆连接数）。
+for svc in worker-image worker-video; do
+  copies=$(docker compose -f "$base" -f "$release_compose" ps -q "$svc" | wc -l)
+  [ "$copies" -eq 1 ] || fail "$svc 副本数为 $copies，期望 1"
+done
 
 trap - ERR
-docker compose -f "$base" -f "$release_compose" ps backend worker
+docker compose -f "$base" -f "$release_compose" ps backend worker-image worker-video
 
 # ---------- 收尾提醒 ----------
 cat <<'EOF'

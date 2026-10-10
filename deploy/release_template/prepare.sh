@@ -45,12 +45,21 @@ backend_image=$(docker compose -f "$root/compose.prod.yml" ps -q backend \
   | head -1 | xargs -r docker inspect --format '{{.Image}}')
 test -n "$backend_image" || { echo "找不到运行中的 backend 容器" >&2; exit 1; }
 
-# backend 与 worker 共用镜像；worker 多副本，必须确认它们来自同一镜像。
-worker_images=$(docker compose -f "$root/compose.prod.yml" ps -q worker \
-  | xargs -r docker inspect --format '{{.Image}}' | sort -u)
+# backend 与两个 worker 服务共用同一个镜像；必须确认它们来自同一镜像，
+# 否则回滚 tag 会指向一个不是当前运行版本的镜像。
+#
+# 注意服务名：worker 已拆成 worker-image / worker-video（并发在进程内部，
+# 每个服务固定 1 个副本）。继续查旧的 `worker` 服务名会拿到空值，
+# 被下面的 count 判断误报成"镜像不一致"而中止发布。
+worker_images=$(
+  for svc in worker-image worker-video; do
+    docker compose -f "$root/compose.prod.yml" ps -q "$svc" \
+      | xargs -r docker inspect --format '{{.Image}}'
+  done | sort -u
+)
 worker_count=$(printf '%s\n' "$worker_images" | grep -c . || true)
 if [ "$worker_count" -ne 1 ]; then
-  echo "worker 副本的镜像不一致（$worker_count 种），请先确认线上状态" >&2
+  echo "worker 服务的镜像不一致（$worker_count 种），请先确认线上状态" >&2
   printf '%s\n' "$worker_images" >&2
   exit 1
 fi
