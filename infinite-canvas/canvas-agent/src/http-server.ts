@@ -95,15 +95,28 @@ export function startHttpServer() {
     app.use((_req, res) => res.status(404).json({ ok: false, error: "not found" }));
     app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => res.status(500).json({ ok: false, error: error.message }));
 
-    app.listen(port, "127.0.0.1", () => {
-        for (const line of startupLogLines(config)) console.log(line);
+    // 监听地址可配置。默认仍是回环（安全默认：agent 持有 Codex 凭据，
+    // 不该默认对外暴露）。
+    //
+    // 为什么要能改：agent 跑在独立容器里，健康探针由 backend 容器发起，
+    // 走的是容器网络。只绑 127.0.0.1 时 backend 连不上，运行总览会一直
+    // 报 "ConnectionError: Agent 异常"——而容器自身的 healthcheck
+    // （在容器内打 127.0.0.1）却是 healthy，所以问题看日志看不出来。
+    // compose 里设 HUISHI_AGENT_BIND_HOST=0.0.0.0 即可让同网络可达。
+    // 端口不对外发布（compose 没有 ports 映射），仅容器网络内可见。
+    const bindHost = process.env.HUISHI_AGENT_BIND_HOST || "127.0.0.1";
+    app.listen(port, bindHost, () => {
+        for (const line of startupLogLines(config, bindHost)) console.log(line);
     });
 }
 
-export function startupLogLines(config: CanvasAgentConfig) {
+export function startupLogLines(config: CanvasAgentConfig, bindHost = "127.0.0.1") {
     return [
         "Infinite Canvas Agent",
         `Local URL: ${config.url}`,
+        // 把实际绑定地址打出来。此前日志只说 127.0.0.1，但没说是"只绑回环"
+        // 还是"绑全部"——排查探针连不上的问题时，这一行是关键线索。
+        `Bind: ${bindHost}`,
         "Connect token: configured",
         "Codex MCP: codex mcp add infinite-canvas -- npx -y @basketikun/canvas-agent mcp",
     ];

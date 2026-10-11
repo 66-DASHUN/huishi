@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import json
 import shutil
 from datetime import datetime, timedelta, timezone
@@ -62,16 +64,35 @@ def _probe_http(url: str, label: str) -> ProbeResult:
 
 
 def probe_canvas() -> ProbeResult:
+    """探测画布是否在线。
+
+    优先用**容器网络内的地址**（compose 里的服务名 canvas:3000），而不是
+    公网域名：走公网要绕 Cloudflare，站点重启的瞬间边缘会返回 521，
+    把内部服务判成"异常"；而且公网往返本身就慢。
+
+    画布是 Next.js 且 basePath=/canvas-app，所以根路径返回 404，
+    必须带上 basePath 才算探活成功。
+    """
     if current_app.config.get("TESTING"):
         return _result("unknown", "测试环境未探测")
     url = str(current_app.config.get("CANVAS_APP_URL") or "").rstrip("/")
-    return _probe_http(url, "画布")
+    if not url:
+        return _result("warning", "未配置画布地址")
+    return _probe_http(f"{url}/canvas-app", "画布")
 
 
 def probe_agent() -> ProbeResult:
+    """探测画布 Agent 是否在线。
+
+    注意：agent 容器自身的 healthcheck 是**在容器内**打 127.0.0.1，所以
+    即使它只绑回环、外部完全连不上，容器状态也显示 healthy。
+    这类"容器健康但服务不可达"只能靠这里的跨容器探测发现。
+    """
     if current_app.config.get("TESTING"):
         return _result("unknown", "测试环境未探测")
-    url = str(current_app.config.get("CANVAS_AGENT_URL") or "http://127.0.0.1:17371").rstrip("/")
+    url = str(current_app.config.get("CANVAS_AGENT_URL") or "").rstrip("/")
+    if not url:
+        return _result("warning", "未配置 Agent 地址")
     return _probe_http(f"{url}/health", "Agent")
 
 
@@ -133,8 +154,55 @@ def probe_paused_media_tasks() -> ProbeResult:
     )
 
 
+def _cron_schedule(path: str) -> str:
+    """从 cron 文件里取执行时间，返回 "04:17" 这样的可读串。"""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" in line.split(" ")[0]:
+                    continue
+                parts = line.split()
+                if len(parts) >= 5:
+                    return f"{int(parts[1]):02d}:{int(parts[0]):02d}"
+    except (OSError, ValueError):
+        return ""
+    return ""
+
+
+def _cron_candidates() -> tuple[tuple[str, str], ...]:
+    """清理任务的候选定时文件。
+
+    抽成函数是为了测试能注入——否则测试只能依赖服务器的真实文件系统。
+    cron 在前：线上实际用的是 cron，systemd timer 是历史遗留的写法
+    （此前探针文案写的就是它，但那个单元根本不存在）。
+    """
+    return (
+        ("/etc/cron.d/huishi-storage-sweep", "cron"),
+        ("/etc/systemd/system/huishi-storage-sweep.timer", "systemd timer"),
+        ("/lib/systemd/system/huishi-storage-sweep.timer", "systemd timer"),
+    )
+
+
 def probe_storage_cleanup() -> ProbeResult:
-    return _result("unknown", "由 huishi-storage-sweep.timer 定时执行")
+    """uploads 清理任务的真实状态。
+
+    此前这里写死一句 "由 huishi-storage-sweep.timer 定时执行" ——
+    但线上根本没有那个 systemd timer（实测无任何 huishi systemd 单元），
+    实际执行的是宿主 cron。运维照那句话去 systemctl status 只会一无所获。
+
+    改为读实际存在的定时文件，报出真实的调度时间；都没有则报 warning，
+    因为那意味着保留策略在空转（这正是此前长期存在的问题）。
+
+    刻意**不做 TESTING 短路**：它只读本地文件、不依赖任何外部服务，
+    测试环境里同样该如实反映（否则这条探针永远测不到）。
+    """
+    for path, kind in _cron_candidates():
+        if os.path.isfile(path):
+            when = _cron_schedule(path) if kind == "cron" else ""
+            detail = f"每天 {when}（{kind}）" if when else f"由 {kind} 定时执行"
+            return _result("ok", detail)
+    return _result("warning", "未发现定时清理任务，保留策略可能未生效")
 
 
 def collect_operations_health() -> dict[str, ProbeResult]:

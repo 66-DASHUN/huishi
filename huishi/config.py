@@ -127,7 +127,12 @@ class Config:
     # 默认图片 API Key；也可以在后台 provider 中配置。
     DEFAULT_API_KEY = os.environ.get("API_KEY", "")
     # 默认画布应用地址；用于 /canvas 独立页的初始嵌入目标。
-    CANVAS_APP_URL = os.environ.get("HUISHI_CANVAS_APP_URL", "http://127.0.0.1:3000")
+    # 画布地址：默认用容器网络内的服务名。
+    # 用 127.0.0.1 是错的——backend 与 canvas 是两个容器，回环指向自己。
+    # 线上 .env 曾覆盖成公网域名，导致探针绕 Cloudflare、边缘偶发 521 时
+    # 把健康的画布判成"异常"。
+    CANVAS_APP_URL = os.environ.get("HUISHI_CANVAS_APP_URL", "http://canvas:3000")
+    CANVAS_AGENT_URL = os.environ.get("HUISHI_CANVAS_AGENT_URL", "http://canvas-agent:17371")
     # 主站签发给画布的短时会话 token TTL，单位秒。
     CANVAS_SESSION_TTL_SECONDS = int(os.environ.get("HUISHI_CANVAS_SESSION_TTL_SECONDS", "86400"))
     # 画布生图的单用户提交频率上限（次 / 窗口秒）。

@@ -144,6 +144,11 @@ services:
     environment:
       HOME: /var/lib/huishi-agent
       PORT: 17371
+      # 绑 0.0.0.0 让同网络内的 backend 能探活。默认只绑 127.0.0.1，
+      # 于是 backend 走容器名连不上，运行总览一直报 Agent 异常，
+      # 而容器自身 healthcheck（在容器内打回环）却是 healthy，很难发现。
+      # 端口没有对外发布（本服务无 ports 映射），仅容器网络可见。
+      HUISHI_AGENT_BIND_HOST: 0.0.0.0
     volumes:
       - agent-data:/var/lib/huishi-agent
     healthcheck:
