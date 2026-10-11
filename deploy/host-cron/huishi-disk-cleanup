@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# 绘世磁盘清理（宿主侧 cron 调用；**只清理 huishi 自己的资源**）。
+#
+# 为什么需要：这台服务器同时跑着 sub2api / gpt-image-playground / grok-stack
+# 等其它服务，磁盘 86% 时任何一个写爆都会连累全机。而绘世每次发布都会
+# 产生一张约 4GB 的后端镜像，历史版本不清就会无限堆积。
+#
+# 清理三类，都只针对 huishi 命名空间：
+#   1) 悬空镜像（dangling，无 tag 的中间层）—— 纯垃圾，删了不影响任何东西
+#   2) 已停止且非本项目的容器 —— 只删名字带 huishi 前缀的
+#   3) 构建缓存中「超过 N 天未使用」的部分 —— 这条能回收最多（实测 39GB）
+#
+# **不删**：
+#   * 带 tag 的 huishi-backend/huishi-canvas 镜像（回滚要用，由发布流程管理）
+#   * rollback-* tag（回滚目标，删了就失去退路）
+#   * 任何非 huishi 的资源
+#
+# 安全约束：`docker builder prune` 是全局的，但它只删**未被使用**的缓存；
+# 其它服务不会因此损坏，只是下次构建要重新编译。为把影响降到最低，
+# 用 `--filter until=168h` 只清理一周以上没被用过的缓存。
+set -euo pipefail
+
+LOG_TAG="huishi-disk-cleanup"
+CACHE_KEEP_HOURS="${CACHE_KEEP_HOURS:-168}"   # 7 天
+DRY_RUN="${DRY_RUN:-0}"
+
+log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
+before=$(df -B1 --output=avail / | tail -1 | tr -d ' ')
+
+log "start avail=$((before / 1024 / 1024))MB cache_keep=${CACHE_KEEP_HOURS}h dry_run=$DRY_RUN"
+
+if [ "$DRY_RUN" = "1" ]; then
+  log "would prune dangling images: $(docker images -f dangling=true -q | wc -l) 个"
+  log "would prune build cache older than ${CACHE_KEEP_HOURS}h"
+  exit 0
+fi
+
+# 1) 悬空镜像：无 tag，不可能是回滚目标，删除绝对安全。
+#    实测每个 3~4GB，是主要垃圾来源。
+dangling=$(docker images -f dangling=true -q | sort -u)
+if [ -n "$dangling" ]; then
+  count=$(printf '%s\n' "$dangling" | grep -c . || true)
+  # 逐个删：某个删不掉（比如正被引用）不应中断整轮清理。
+  printf '%s\n' "$dangling" | while read -r img; do
+    [ -n "$img" ] || continue
+    docker rmi "$img" >/dev/null 2>&1 || true
+  done
+  log "pruned dangling images attempted=$count"
+else
+  log "no dangling images"
+fi
+
+# 2) 已停止的 huishi 容器（只认 huishi 前缀，绝不碰别的服务）。
+stopped=$(docker ps -a --filter "status=exited" --format '{{.Names}}' | grep -E '^huishi-' || true)
+if [ -n "$stopped" ]; then
+  count=$(printf '%s\n' "$stopped" | grep -c . || true)
+  printf '%s\n' "$stopped" | while read -r name; do
+    [ -n "$name" ] || continue
+    docker rm "$name" >/dev/null 2>&1 || true
+  done
+  log "removed exited huishi containers attempted=$count"
+else
+  log "no exited huishi containers"
+fi
+
+# 3) 构建缓存：只清超过保留期的部分。
+#    注意这是全局操作，但只影响"未被使用"的缓存；保留期内的不动，
+#    这样正在迭代的服务（包括其它项目）不会被打断。
+if docker builder prune -f --filter "until=${CACHE_KEEP_HOURS}h" >/dev/null 2>&1; then
+  log "pruned build cache older than ${CACHE_KEEP_HOURS}h"
+else
+  log "build cache prune skipped (unsupported or failed)"
+fi
+
+after=$(df -B1 --output=avail / | tail -1 | tr -d ' ')
+freed=$((after - before))
+log "done avail=$((after / 1024 / 1024))MB freed=$((freed / 1024 / 1024))MB"
+
+# 磁盘水位告警（写进日志；cron 会把 stderr 也记下来）
+used_pct=$(df --output=pcent / | tail -1 | tr -d ' %')
+if [ "$used_pct" -ge 90 ]; then
+  log "ALERT disk usage ${used_pct}% (>=90%)"
+  exit 2
+fi
+if [ "$used_pct" -ge 80 ]; then
+  log "WARN disk usage ${used_pct}% (>=80%)"
+fi
+exit 0

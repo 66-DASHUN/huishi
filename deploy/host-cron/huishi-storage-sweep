@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# 绘世 uploads 清理：删除孤儿/已隐藏的过期上传文件。
+#
+# 为什么需要：生成结果与用户上传的参考图只增不减。而
+# STORAGE_ORPHAN_RETENTION_DAYS=7 / STORAGE_HIDDEN_RETENTION_DAYS=14 这些
+# 保留策略此前**没有任何东西在执行**——sweep_local_uploads 只是个 CLI 命令，
+# cron 里没有条目，等于空转。
+#
+# 关键性质：它**保护所有仍被 records / generation_tasks /
+# canvas_project_assets 引用的文件**（见 storage.upload_reference_names），
+# 所以不会删掉用户的作品或已扣费生成的结果，删的只是无人引用的孤儿文件。
+set -euo pipefail
+
+CONTAINER="${HUISHI_BACKEND_CONTAINER:-huishi-backend-1}"
+
+# 容器不在就直接跳过（发布过程中容器会短暂消失，不该报错）
+if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) backend container not running; skipped"
+  exit 0
+fi
+
+# --delete 才真删；不加就是干跑。命令自身会打印一行 storage-sweep 摘要，
+# 这里只留那一行，避免刷屏。
+docker exec "$CONTAINER" python -m flask storage-sweep --delete 2>&1 \
+  | grep -E "^storage-sweep" \
+  || echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) storage-sweep produced no summary line"
