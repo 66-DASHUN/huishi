@@ -4,6 +4,7 @@ import os
 
 import json
 import shutil
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
@@ -154,55 +155,78 @@ def probe_paused_media_tasks() -> ProbeResult:
     )
 
 
-def _cron_schedule(path: str) -> str:
-    """从 cron 文件里取执行时间，返回 "04:17" 这样的可读串。"""
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" in line.split(" ")[0]:
-                    continue
-                parts = line.split()
-                if len(parts) >= 5:
-                    return f"{int(parts[1]):02d}:{int(parts[0]):02d}"
-    except (OSError, ValueError):
-        return ""
-    return ""
+# 清理任务的日志文件名。任务由**宿主 cron** 触发，但它把结果写进
+# 容器与宿主共享的日志卷（compose 的 logs 卷挂在 /var/log/huishi），
+# 所以容器内的探针能读到——这是它能观测宿主任务的唯一途径。
+_CLEANUP_LOG_NAMES = (
+    "huishi-storage-sweep.log",
+    "huishi-disk-cleanup.log",
+)
 
 
-def _cron_candidates() -> tuple[tuple[str, str], ...]:
-    """清理任务的候选定时文件。
+def _cleanup_log_dirs() -> tuple[str, ...]:
+    """清理日志所在目录（按可能性排序）。
 
-    抽成函数是为了测试能注入——否则测试只能依赖服务器的真实文件系统。
-    cron 在前：线上实际用的是 cron，systemd timer 是历史遗留的写法
-    （此前探针文案写的就是它，但那个单元根本不存在）。
+    抽成函数是为了测试能注入——否则测试只能依赖真实文件系统。
     """
-    return (
-        ("/etc/cron.d/huishi-storage-sweep", "cron"),
-        ("/etc/systemd/system/huishi-storage-sweep.timer", "systemd timer"),
-        ("/lib/systemd/system/huishi-storage-sweep.timer", "systemd timer"),
-    )
+    log_dir = str(current_app.config.get("LOG_DIR") or "/var/log/huishi")
+    return (log_dir, "/var/log/huishi")
+
+
+def _read_cleanup_log_tail() -> tuple[str, float] | None:
+    """返回（最后一行内容, 文件修改时间），取不到则 None。"""
+    newest: tuple[str, float] | None = None
+    for directory in _cleanup_log_dirs():
+        for name in _CLEANUP_LOG_NAMES:
+            path = os.path.join(directory, name)
+            try:
+                mtime = os.path.getmtime(path)
+            except OSError:
+                continue
+            if newest is not None and mtime <= newest[1]:
+                continue
+            tail = ""
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    lines = [ln.strip() for ln in fh if ln.strip()]
+                tail = lines[-1] if lines else ""
+            except OSError:
+                tail = ""
+            newest = (tail, mtime)
+    return newest
 
 
 def probe_storage_cleanup() -> ProbeResult:
     """uploads 清理任务的真实状态。
 
-    此前这里写死一句 "由 huishi-storage-sweep.timer 定时执行" ——
-    但线上根本没有那个 systemd timer（实测无任何 huishi systemd 单元），
-    实际执行的是宿主 cron。运维照那句话去 systemctl status 只会一无所获。
+    历史：这里曾写死 "由 huishi-storage-sweep.timer 定时执行" —— 但线上
+    根本没有那个 systemd 单元，实际执行的是**宿主 cron**。运维照那句话去
+    systemctl status 只会一无所获。
 
-    改为读实际存在的定时文件，报出真实的调度时间；都没有则报 warning，
-    因为那意味着保留策略在空转（这正是此前长期存在的问题）。
+    后来改成读 /etc/cron.d —— 又错了：backend 在容器里，看不到宿主文件系统，
+    于是永远报 warning，一个常报警的探针等于没有探针。
 
-    刻意**不做 TESTING 短路**：它只读本地文件、不依赖任何外部服务，
-    测试环境里同样该如实反映（否则这条探针永远测不到）。
+    现在读**共享日志卷**：任务把结果写进 /var/log/huishi（compose 的 logs 卷，
+    容器与宿主都能看到）。"任务最近有没有真的跑起来、结果如何"比"定时配置
+    存不存在"更接近健康的本意 —— 配置存在但任务失败才是更危险的情况。
+
+    刻意不做 TESTING 短路：它只读本地文件、不依赖外部服务，
+    测试环境同样该如实反映，否则这条探针永远测不到。
     """
-    for path, kind in _cron_candidates():
-        if os.path.isfile(path):
-            when = _cron_schedule(path) if kind == "cron" else ""
-            detail = f"每天 {when}（{kind}）" if when else f"由 {kind} 定时执行"
-            return _result("ok", detail)
-    return _result("warning", "未发现定时清理任务，保留策略可能未生效")
+    found = _read_cleanup_log_tail()
+    if found is not None:
+        tail, mtime = found
+        age_hours = (time.time() - mtime) / 3600
+        # 每天跑一次；超过 36 小时没动静说明任务没在跑或一直失败。
+        if age_hours > 36:
+            return _result(
+                "warning",
+                f"上次清理在 {age_hours / 24:.0f} 天前，可能未按计划执行",
+                age_hours=round(age_hours, 1),
+            )
+        detail = tail or "已执行"
+        return _result("ok", f"上次清理 {age_hours:.1f} 小时前 · {detail}", age_hours=round(age_hours, 1))
+    return _result("warning", "未见清理日志，保留策略可能未生效")
 
 
 def collect_operations_health() -> dict[str, ProbeResult]:

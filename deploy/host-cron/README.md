@@ -14,6 +14,11 @@
 
 时间刻意错开：数据库备份在 10:40，uploads 清理 04:17，磁盘清理 05:23。
 
+**日志必须写进共享卷**（宿主是 `/var/lib/docker/volumes/huishi_logs/_data`，
+容器内是 `/var/log/huishi`）。原因：运行总览的清理探针跑在 backend 容器里，
+读不到宿主 `/etc/cron.d`；日志放共享卷它才观测得到，否则那条探针永远报
+warning（常报警的探针等于没有探针）。
+
 ## 安装
 
 ```bash
@@ -22,12 +27,12 @@ install -m 0755 huishi-disk-cleanup  /usr/local/bin/
 cat > /etc/cron.d/huishi-storage-sweep <<'EOF'
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-17 4 * * * root /usr/local/bin/huishi-storage-sweep >> /var/log/huishi-storage-sweep.log 2>&1
+17 4 * * * root /usr/local/bin/huishi-storage-sweep >> /var/log/huishi/huishi-storage-sweep.log 2>&1
 EOF
 cat > /etc/cron.d/huishi-disk-cleanup <<'EOF'
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-23 5 * * * root /usr/local/bin/huishi-disk-cleanup >> /var/log/huishi-disk-cleanup.log 2>&1
+23 5 * * * root /usr/local/bin/huishi-disk-cleanup >> /var/log/huishi/huishi-disk-cleanup.log 2>&1
 EOF
 chmod 0644 /etc/cron.d/huishi-*
 ```
@@ -57,4 +62,4 @@ docker exec huishi-backend-1 python -m flask storage-sweep   # 不加 --delete �
 ## 磁盘水位
 
 脚本会在使用率 ≥80% 时记 WARN、≥90% 时记 ALERT（并返回退出码 2）。
-日志：`/var/log/huishi-disk-cleanup.log`。
+日志：`/var/log/huishi/huishi-disk-cleanup.log`。

@@ -12,7 +12,8 @@
 """
 from __future__ import annotations
 
-from pathlib import Path
+import os
+import time
 
 import pytest
 
@@ -83,40 +84,47 @@ def test_agent_probe_uses_container_hostname(monkeypatch):
     assert seen == ["http://canvas-agent:17371/health"]
 
 
-def test_storage_cleanup_reports_real_cron_schedule(monkeypatch, tmp_path):
-    """存在 cron 条目时，应报出真实的执行时间，而不是写死的假文案。"""
-    cron = tmp_path / "huishi-storage-sweep"
-    cron.write_text(
-        "SHELL=/bin/bash\n"
-        "PATH=/usr/local/bin:/usr/bin\n"
-        "17 4 * * * root /usr/local/bin/huishi-storage-sweep >> /var/log/x.log 2>&1\n",
+def test_storage_cleanup_reports_last_run_from_shared_log(monkeypatch, tmp_path):
+    """有清理日志时，应报出最近一次执行的时间与结果。
+
+    探针读的是**共享日志卷**（/var/log/huishi），不是宿主 /etc/cron.d——
+    后者容器看不到，会永远报 warning（一个常报警的探针等于没有探针）。
+    "任务最近有没有真的跑起来"比"定时配置存不存在"更接近健康的本意。
+    """
+    log = tmp_path / "huishi-storage-sweep.log"
+    log.write_text(
+        "2026-10-11T04:17:01Z storage-sweep deleted_files=32 deleted_bytes=29753541" + chr(10),
         encoding="utf-8",
     )
     app = _app()
-    real_isfile = operations.os.path.isfile
-    monkeypatch.setattr(
-        operations.os.path,
-        "isfile",
-        lambda p: str(p) == str(cron) or real_isfile(p),
-    )
-    # 把候选路径指向临时文件
-    monkeypatch.setattr(
-        operations,
-        "_cron_candidates",
-        lambda: ((str(cron), "cron"),),
-        raising=False,
-    )
+    monkeypatch.setattr(operations, "_cleanup_log_dirs", lambda: (str(tmp_path),))
     with app.app_context():
         result = operations.probe_storage_cleanup()
     assert result["status"] == "ok"
-    assert "04:17" in result["message"]
-    assert "timer" not in result["message"]
+    assert "上次清理" in result["message"]
+    # 日志最后一行透出，便于直接在总览页看到执行结果
+    assert "deleted_files=32" in result["message"]
 
 
-def test_storage_cleanup_warns_when_nothing_scheduled(monkeypatch):
-    """没有任何定时任务时应报警——这意味着保留策略在空转。"""
+def test_storage_cleanup_warns_when_log_is_stale(monkeypatch, tmp_path):
+    """日志超过 36 小时未更新 → 任务可能没在跑。"""
+    log = tmp_path / "huishi-storage-sweep.log"
+    log.write_text("2026-10-01T04:17:01Z storage-sweep deleted_files=0" + chr(10), encoding="utf-8")
+    stale = time.time() - 72 * 3600
+    os.utime(log, (stale, stale))
     app = _app()
-    monkeypatch.setattr(operations, "_cron_candidates", lambda: (), raising=False)
+    monkeypatch.setattr(operations, "_cleanup_log_dirs", lambda: (str(tmp_path),))
     with app.app_context():
         result = operations.probe_storage_cleanup()
     assert result["status"] == "warning"
+    assert "天前" in result["message"]
+
+
+def test_storage_cleanup_warns_when_no_log(monkeypatch, tmp_path):
+    """完全没有日志 → 保留策略可能未生效（此前长期存在的问题）。"""
+    app = _app()
+    monkeypatch.setattr(operations, "_cleanup_log_dirs", lambda: (str(tmp_path),))
+    with app.app_context():
+        result = operations.probe_storage_cleanup()
+    assert result["status"] == "warning"
+    assert "保留策略" in result["message"]
