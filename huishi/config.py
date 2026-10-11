@@ -197,11 +197,14 @@ class Config:
     # 256 留了约 2 倍余量。
     GENERATION_IMAGE_PROCESSES = int(os.environ.get("HUISHI_GENERATION_IMAGE_PROCESSES", "8"))
     GENERATION_IMAGE_THREADS = int(os.environ.get("HUISHI_GENERATION_IMAGE_THREADS", "32"))
-    # 视频默认 2 × 8 = 16：视频 CPU 极低，但**每个在跑的任务会长时间持有
-    # 一个数据库连接**（轮询循环里 sleep），所以它的上限由连接预算和
-    # 单条成本（400~700 积分）决定，而不是 CPU。可随时放宽。
-    GENERATION_VIDEO_PROCESSES = int(os.environ.get("HUISHI_GENERATION_VIDEO_PROCESSES", "2"))
-    GENERATION_VIDEO_THREADS = int(os.environ.get("HUISHI_GENERATION_VIDEO_THREADS", "8"))
+    # 视频默认 4 × 16 = 64。视频 CPU 与数据库占用都很低：
+    #   * 全程只是在等上游（轮询循环，每 5 秒一次）
+    #   * 每个任务最长占槽 300 秒（轮询 deadline），不是 20 分钟
+    #   * 等待期间连接已释放（见 generation_queue 的 close_db 调用）
+    # 所以真正的约束是内存（每进程约 35MB 基线）与上游额度，
+    # 而不是 CPU 或数据库连接。64 个槽位约占 2.2GB 内存。
+    GENERATION_VIDEO_PROCESSES = int(os.environ.get("HUISHI_GENERATION_VIDEO_PROCESSES", "4"))
+    GENERATION_VIDEO_THREADS = int(os.environ.get("HUISHI_GENERATION_VIDEO_THREADS", "16"))
 
     # 注意：这里用**显式常量**而不是 @property。
     # app.py 走的是 app.config.from_object(Config)，它只复制类属性；
@@ -212,10 +215,36 @@ class Config:
     RQ_RESULT_TTL_SECONDS = int(os.environ.get("HUISHI_RQ_RESULT_TTL_SECONDS", "60"))
     RQ_FAILURE_TTL_SECONDS = int(os.environ.get("HUISHI_RQ_FAILURE_TTL_SECONDS", "86400"))
     APP_IMPORT_PATH = os.environ.get("HUISHI_APP_IMPORT_PATH", "app:create_app")
+    # 图片/音频/视频**各自独立**的上游额度。
+    #
+    # 为什么要分：三者的请求特征完全不同。图片一条约 27 秒；视频一条最长
+    # 300 秒且期间要轮询约 60 次；音频量很小。混在一个池子里时，视频的密集
+    # 轮询会挤占图片额度，音频也会白占图片的名额。
+    #
+    # 视频的 RPM 尤其要注意：它要按**轮询次数**放量而不是任务数，
+    # 否则池子会被自己的轮询打满而自锁。详见下面的 UPSTREAM_VIDEO_* 说明。
+    #
+    # 图片池沿用原有的 HUISHI_UPSTREAM_MAX_CONCURRENCY/RPM_LIMIT 变量名，
+    # 不改键名——滚动发布期间新旧进程并存，改键名会让两边各算各的额度，
+    # 实际并发翻倍。
     UPSTREAM_MAX_CONCURRENCY = int(os.environ.get("HUISHI_UPSTREAM_MAX_CONCURRENCY", "240"))
     UPSTREAM_RPM_LIMIT = int(os.environ.get("HUISHI_UPSTREAM_RPM_LIMIT", "300"))
+    UPSTREAM_AUDIO_MAX_CONCURRENCY = int(os.environ.get("HUISHI_UPSTREAM_AUDIO_MAX_CONCURRENCY", "32"))
+    UPSTREAM_AUDIO_RPM_LIMIT = int(os.environ.get("HUISHI_UPSTREAM_AUDIO_RPM_LIMIT", "120"))
+    # 视频池：按"同时在跑多少条视频"来定，因为一条视频从头占到尾（最长 300 秒）。
+    # 64 个任务槽位配 64 并发刚刚好，不会有人空等。
+    UPSTREAM_VIDEO_MAX_CONCURRENCY = int(os.environ.get("HUISHI_UPSTREAM_VIDEO_MAX_CONCURRENCY", "64"))
+    # 视频 RPM 必须按**轮询次数**放量，不能按任务数：一条视频 300 秒内每 5 秒
+    # 轮询一次 = 约 60 次请求。64 条同时轮询就是约 768 次/分钟。若按任务数给
+    # 120，池子会被轮询瞬间打满而自锁（所有视频互相等，谁也过不去）。
+    # 给 2400（= 64 × 约 37 次/分钟的余量）只作为防止异常刷接口的兜底，
+    # 真正的限速交给渠道层的 channel_capacity。
+    UPSTREAM_VIDEO_RPM_LIMIT = int(os.environ.get("HUISHI_UPSTREAM_VIDEO_RPM_LIMIT", "2400"))
     GENERATION_LIMIT_WAIT_TIMEOUT_SECONDS = float(os.environ.get("HUISHI_GENERATION_LIMIT_WAIT_TIMEOUT_SECONDS", "840"))
     GENERATION_LIMIT_WAIT_SLEEP_SECONDS = float(os.environ.get("HUISHI_GENERATION_LIMIT_WAIT_SLEEP_SECONDS", "1"))
+    # 视频排队等上游额度时的租约续租周期（秒）。租约 TTL 是 180 秒，
+    # 取 60 秒（1/3）留余量。压到 0 可让测试观察到续租行为。
+    VIDEO_CAPACITY_RENEW_SECONDS = float(os.environ.get("HUISHI_VIDEO_CAPACITY_RENEW_SECONDS", "60"))
     # 生成任务超过该时间仍未完成时视为过期；默认覆盖限流等待窗口和图片 API 超时。
     GENERATION_TASK_STALE_SECONDS = float(
         os.environ.get(

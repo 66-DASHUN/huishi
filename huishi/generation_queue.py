@@ -32,7 +32,7 @@ from huishi.video_api import VideoApiError, create_video_task, download_video_re
 
 logger = logging.getLogger(__name__)
 _executor: ThreadPoolExecutor | None = None
-_memory_limiter: InMemoryGenerationLimiter | None = None
+_memory_limiter: dict[str, InMemoryGenerationLimiter] = {}
 
 
 def get_generation_executor(app: Flask) -> ThreadPoolExecutor:
@@ -135,10 +135,37 @@ def get_rq_queue(app: Flask, queue_name: str | None = None):
     return Queue(queue_name or generation_queue_name(app, "image"), connection=connection)
 
 
-def get_generation_limiter(app: Flask):
+# 各媒体类型的上游额度配置键与键名前缀。
+#
+# 为什么图片用空前缀：**沿用旧键名**。滚动发布时新旧 worker 会短暂并存，
+# 若改了键名，两边各算各的额度，实际并发会翻倍。图片是主流量，必须平滑。
+# 音频/视频是新拆出来的池子，用独立前缀。
+_POOL_CONFIG = {
+    "image": ("UPSTREAM_MAX_CONCURRENCY", "UPSTREAM_RPM_LIMIT", ""),
+    "audio": ("UPSTREAM_AUDIO_MAX_CONCURRENCY", "UPSTREAM_AUDIO_RPM_LIMIT", "audio:"),
+    "video": ("UPSTREAM_VIDEO_MAX_CONCURRENCY", "UPSTREAM_VIDEO_RPM_LIMIT", "video:"),
+}
+
+
+def get_generation_limiter(app: Flask, pool: str = "image"):
+    """取某个媒体类型的上游额度池。
+
+    三个池子互相独立（图片/音频/视频），互不挤占。见 config 里的说明：
+    图片一条约 27 秒，视频一条最长 300 秒且期间要轮询约 60 次，
+    混在一起时视频的密集轮询会挤占图片额度。
+    """
+    if pool not in _POOL_CONFIG:
+        raise ValueError(f"unknown generation pool: {pool!r}")
+    concurrency_key, rpm_key, prefix = _POOL_CONFIG[pool]
+    max_concurrency = int(app.config.get(concurrency_key, 240))
+    rpm = int(app.config.get(rpm_key, 300))
+    # 键名由 RedisGenerationLimiter 拼成 f"{namespace}:generation:active"。
+    #   image -> "huishi"        -> huishi:generation:active       （与旧键一致）
+    #   audio -> "huishi:audio"  -> huishi:audio:generation:active
+    #   video -> "huishi:video"  -> huishi:video:generation:active
+    base_namespace = str(app.config.get("RATE_LIMIT_NAMESPACE", "huishi"))
+    namespace = f"{base_namespace}:{prefix.rstrip(':')}" if prefix else base_namespace
     redis_url = str(app.config.get("REDIS_URL") or "").strip()
-    max_concurrency = int(app.config.get("UPSTREAM_MAX_CONCURRENCY", 240))
-    rpm = int(app.config.get("UPSTREAM_RPM_LIMIT", 300))
     if redis_url:
         try:
             from redis import Redis
@@ -146,17 +173,22 @@ def get_generation_limiter(app: Flask):
             raise RuntimeError("Install redis to use shared generation limits") from exc
         return RedisGenerationLimiter(
             Redis.from_url(redis_url),
-            namespace=str(app.config.get("RATE_LIMIT_NAMESPACE", "huishi")),
+            namespace=namespace,
             max_concurrency=max_concurrency,
             rpm=rpm,
             active_ttl_seconds=effective_rq_job_timeout_seconds(app),
         )
     if not app.testing:
         raise RuntimeError('Redis must be configured for shared generation limits')
+    # 测试环境用进程内限流器：按池缓存，别让三个池子互相顶掉。
     global _memory_limiter
-    if _memory_limiter is None or _memory_limiter.max_concurrency != max_concurrency or _memory_limiter.rpm != rpm:
-        _memory_limiter = InMemoryGenerationLimiter(max_concurrency=max_concurrency, rpm=rpm)
-    return _memory_limiter
+    if _memory_limiter is None:
+        _memory_limiter = {}
+    cached = _memory_limiter.get(pool)
+    if cached is None or cached.max_concurrency != max_concurrency or cached.rpm != rpm:
+        cached = InMemoryGenerationLimiter(max_concurrency=max_concurrency, rpm=rpm)
+        _memory_limiter[pool] = cached
+    return cached
 
 
 def run_generation_task_from_import_path(app_import_path: str, task_id: int, cleanup_paths: list[str] | None = None) -> None:
@@ -198,7 +230,7 @@ def run_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | Non
                 if user_provider is None:
                     bypass_billing = False
 
-            limiter = get_generation_limiter(app)
+            limiter = get_generation_limiter(app, pool="image")
             wait_timeout = float(app.config.get("GENERATION_LIMIT_WAIT_TIMEOUT_SECONDS", 840))
             # PostgreSQL SELECTs open a transaction too; release it before capacity waits.
             get_db().commit()
@@ -341,6 +373,45 @@ def finalize_generation_task(
     )
 
 
+def _acquire_video_pool(app: Flask, task_id: int, token: str, metadata: dict):
+    """等视频上游额度，等待期间续租，避免被当成僵尸重复入队。
+
+    用 `acquire(block=False)` 自己轮询，而不是 `block=True`：后者在库内部
+    连着 sleep，中间没有机会调 `save_phase` 续租，租约（TTL 180 秒）会在
+    排队期间过期，维护任务随即把这条任务再入队一次。
+
+    续租周期取 60 秒（租约 180 秒的 1/3），留足余量。
+    """
+    from huishi.generation_limits import GenerationLimitError, GenerationLimitTimeout
+    from huishi.media_tasks import save_phase
+
+    limiter = get_generation_limiter(app, pool="video")
+    wait_timeout = float(app.config.get("GENERATION_LIMIT_WAIT_TIMEOUT_SECONDS", 840))
+    sleep_seconds = max(0.5, float(app.config.get("GENERATION_LIMIT_WAIT_SLEEP_SECONDS", 1.0)))
+    # 续租周期：租约 TTL 是 180 秒，取 60 秒（1/3）留足余量。
+    # 从配置读是为了让测试能压到 0（否则要真等 60 秒才能观察到续租）。
+    renew_every = float(app.config.get("VIDEO_CAPACITY_RENEW_SECONDS", 60.0))
+    deadline = time.monotonic() + max(0.0, wait_timeout)
+    last_renew = time.monotonic()
+    while True:
+        try:
+            try:
+                return limiter.acquire(block=False)
+            except TypeError:
+                # 兼容不接受关键字的限流器实现（与图片路径同一套防御）。
+                return limiter.acquire()
+        except GenerationLimitError:
+            pass
+        if time.monotonic() >= deadline:
+            raise GenerationLimitTimeout("timed out waiting for generation upstream capacity")
+        if time.monotonic() - last_renew >= renew_every:
+            save_phase(task_id, token, metadata, 'waiting_capacity')
+            last_renew = time.monotonic()
+            # 续租用完就放连接：排队可能很久，不该一直占着 Postgres 连接。
+            close_db()
+        time.sleep(sleep_seconds)
+
+
 def run_video_generation_task(app: Flask, task_id: int, cleanup_paths: list[str] | None = None) -> None:
     """Run one server-owned video task and persist the result through UploadStorage."""
     from huishi.media_tasks import claim_task, save_phase, release_task, assert_owner, payload_hash
@@ -354,13 +425,28 @@ def run_video_generation_task(app: Flask, task_id: int, cleanup_paths: list[str]
     token = claim_task(task_id)
     if not token:
         return
-    metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+    pool_lease = None
     try:
         task = get_generation_task(task_id)
         if task['status'] not in ('queued', 'running'):
             return
         metadata = dict(task.get('metadata') or {})
         if metadata.get('phase') == 'needs_reconciliation':
+            return
+        # 上游额度闸门。视频此前**完全没有**全局上限（只受渠道层约束，
+        # 而现役渠道的 RPM 都配成 0=不限）。整条任务占一个名额，从头占到尾。
+        #
+        # 位置说明：必须在 claim_task **之后**——先拿到租约，维护任务才不会
+        # 把这条还在排队的任务当僵尸重复入队（判定条件是 status IN
+        # ('queued','running') AND 无有效租约）。等待期间靠 save_phase 续租。
+        try:
+            pool_lease = _acquire_video_pool(app, task_id, token, metadata)
+        except GenerationLimitTimeout as exc:
+            # 还没向上游提交任何东西，状态确定 —— 直接判失败并释放预扣积分，
+            # 不走 needs_reconciliation（那需要管理员手工核对，没必要）。
+            logger.warning('video capacity wait timed out task_id=%s', task_id)
+            mark_generation_task_failed(task_id, '服务器繁忙，请稍后重试')
+            get_db().commit()
             return
         provider = get_provider(int(task['provider_id'])) if task.get('provider_id') else next(iter(video_provider_candidates(task.get('model'))), None)
         if not provider:
@@ -513,6 +599,9 @@ def run_video_generation_task(app: Flask, task_id: int, cleanup_paths: list[str]
             get_db().rollback()
         logger.warning('video task awaiting recovery task_id=%s phase=%s',task_id,phase)
     finally:
+        # 池子名额先还，再放租约（顺序无所谓，但先还额度能让排队的早点开工）。
+        if pool_lease is not None:
+            pool_lease.release()
         release_task(task_id, token)
 
 
@@ -555,7 +644,7 @@ def run_audio_generation_task(app: Flask, task_id: int, cleanup_paths: list[str]
     get_db().commit()
     if claimed != 1:
         return
-    limiter = get_generation_limiter(app)
+    limiter = get_generation_limiter(app, pool="audio")
     wait_timeout = float(app.config.get("GENERATION_LIMIT_WAIT_TIMEOUT_SECONDS", 840))
     try:
         try:

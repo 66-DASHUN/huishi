@@ -36,7 +36,7 @@ def test_generation_worker_marks_task_failed_when_limiter_rejects(tmp_path, monk
         def acquire(self):
             raise GenerationLimitError("generation upstream RPM limit reached")
 
-    monkeypatch.setattr("huishi.generation_queue.get_generation_limiter", lambda _app: RejectingLimiter())
+    monkeypatch.setattr("huishi.generation_queue.get_generation_limiter", lambda _app, **kwargs: RejectingLimiter())
     monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not call upstream")))
 
     run_generation_task(app, task_id, [])
@@ -89,7 +89,7 @@ def test_generation_worker_waits_for_limiter_capacity(tmp_path, monkeypatch):
             return GenerationLease(lambda: None)
 
     limiter = FlakyLimiter()
-    monkeypatch.setattr("huishi.generation_queue.get_generation_limiter", lambda _app: limiter)
+    monkeypatch.setattr("huishi.generation_queue.get_generation_limiter", lambda _app, **kwargs: limiter)
     monkeypatch.setattr(
         "huishi.generation_queue.generate_image_with_failover",
         lambda **_kwargs: {
@@ -142,7 +142,7 @@ def test_generation_worker_reports_limiter_wait_timeout(tmp_path, monkeypatch):
         def acquire(self, **_kwargs):
             raise GenerationLimitTimeout("timed out waiting for generation upstream capacity")
 
-    monkeypatch.setattr("huishi.generation_queue.get_generation_limiter", lambda _app: TimeoutLimiter())
+    monkeypatch.setattr("huishi.generation_queue.get_generation_limiter", lambda _app, **kwargs: TimeoutLimiter())
     monkeypatch.setattr("huishi.generation_queue.generate_image_with_failover", lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not call upstream")))
 
     run_generation_task(app, task_id, [])
