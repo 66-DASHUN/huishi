@@ -846,31 +846,67 @@ button, input, select { font: inherit; }
   background: var(--studio-bg);
   color: var(--studio-text);
 }
-.studio-shell[data-studio-theme="night"] {
-  --studio-bg: #090a0e;
-  --studio-main: #0b0c10;
-  --studio-rail: #111217;
-  --studio-sidebar: #15161c;
-  --studio-panel: rgba(24,27,34,.88);
-  --studio-floating: rgba(37,39,47,.92);
-  --studio-text: #f5f7fb;
-  --studio-invert: #f5f7fb;
-  --studio-muted: #9ba3af;
-  --studio-line: rgba(255,255,255,.1);
-  --studio-accent: #2ee7ff;
+/* ---- 工作台主题（由 data-studio-theme 选择）---------------------------------
+
+   此前这里是 `[data-studio-theme="night"]` 和 `"paper"`，而**模板写的是
+   `mist` 和 `workspace`** —— 属性值对不上，两套主题从未匹配过任何元素，
+   实际生效的始终是 :root 上的默认值。深色能力由 `:root[data-theme]`
+   那套机制承担（见 theme.js），与这里无关。
+
+   现在把三个工作台页面**实测的计算值**固化下来（用 CDP 读
+   getComputedStyle 得到，不是从别处推断的），于是这个属性第一次真正
+   生效 —— 而外观零变化，因为固化的正是它当前算出来的值。
+
+     mist      workspace 页与 assets 页（两者实测完全相同）
+     workspace asset_detail 页（差异仅在 accent / line / invert）
+
+   注：asset_detail 的 shell class 是 `detail-shell`（不是 studio-shell），
+   所以它的 --studio-invert 本来就不被那条规则赋值。这里保留同一行为。 */
+
+.studio-shell[data-studio-theme="mist"],
+.assets-shell[data-studio-theme="mist"] {
+  --studio-bg: #f4f7fb;
+  --studio-main: #f4f7fb;
+  --studio-rail: #ffffff;
+  --studio-sidebar: #ffffff;
+  --studio-surface: #ffffff;
+  --studio-text: #1f2937;
+  --studio-invert: #1f2937;
+  --studio-muted: #64748b;
+  --studio-line: #d9e0ea;
+  --studio-border: #d9e0ea;
+  --studio-panel: color-mix(in oklch, #ffffff 94%, transparent);
+  --studio-floating: color-mix(in oklch, #ffffff 96%, transparent);
+  --studio-control: #f7f9fc;
+  --studio-control-hover: color-mix(in oklch, #e8f0ff 64%, #ffffff);
+  --studio-control-active: #e8f0ff;
+  --studio-control-active-text: #2563eb;
+  --studio-primary-control: #2563eb;
+  --studio-primary-text: #fff;
+  --studio-soft-shadow: color-mix(in oklch, #1f2937 12%, transparent);
+  --studio-accent: #00a9c7;
 }
-.studio-shell[data-studio-theme="paper"] {
-  --studio-bg: #f3efe7;
-  --studio-main: #fbfaf7;
-  --studio-rail: #25231f;
-  --studio-sidebar: #fffaf0;
-  --studio-panel: rgba(255,255,255,.92);
-  --studio-floating: rgba(47,48,52,.94);
-  --studio-text: #171717;
-  --studio-invert: #fffaf0;
-  --studio-muted: #776f64;
-  --studio-line: rgba(23,23,23,.13);
-  --studio-accent: #087443;
+
+[data-studio-theme="workspace"] {
+  --studio-bg: #f4f7fb;
+  --studio-main: #f4f7fb;
+  --studio-rail: #ffffff;
+  --studio-sidebar: #ffffff;
+  --studio-surface: #ffffff;
+  --studio-text: #1f2937;
+  --studio-muted: #64748b;
+  --studio-line: rgba(31, 42, 29, .12);
+  --studio-border: #d9e0ea;
+  --studio-panel: color-mix(in oklch, #ffffff 94%, transparent);
+  --studio-floating: color-mix(in oklch, #ffffff 96%, transparent);
+  --studio-control: #f7f9fc;
+  --studio-control-hover: color-mix(in oklch, #e8f0ff 64%, #ffffff);
+  --studio-control-active: #e8f0ff;
+  --studio-control-active-text: #2563eb;
+  --studio-primary-control: #2563eb;
+  --studio-primary-text: #fff;
+  --studio-soft-shadow: color-mix(in oklch, #1f2937 12%, transparent);
+  --studio-accent: #85ab8b;
 }
 .studio-rail {
   min-height: 100vh;
