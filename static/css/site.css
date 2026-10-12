@@ -1,3 +1,42 @@
+/* ==========================================================================
+   绘世站点主样式表
+
+   ## 主题机制（改样式前先读这段）
+
+   页面上有**三套**主题属性，用途不同，别弄混：
+
+   1. `:root[data-theme="light|dark"]`
+      由 `static/js/theme.js` 与 `templates/base.html` 设置。
+      **深色已在产品层退役** —— `resolveTheme()` 直接 `return "light"`，
+      两个设置点都写死了 `"light"`。所以本表里 `data-theme="dark"` 的
+      分支（约 13 条）当前不会生效。
+
+   2. `:root[data-workspace-theme="light|dark"]`
+      同上，由同一处设置，取值恒为 `light`。本表里约 112 条 dark 分支
+      同样不生效。
+
+   3. `[data-studio-theme="mist|workspace"]`
+      写在三个工作台页面的 `<main>` 上（workspace / assets / asset_detail）。
+      这是**唯一真正区分页面的主题机制**。此前 CSS 里写的是
+      `night` / `paper`，与模板的属性值对不上、从未生效 —— 已修正为
+      `mist` / `workspace`（值为 CDP 实测的计算值，见该处注释）。
+
+   ⚠️ 上面第 1、2 套的 dark 分支是**已退役功能的遗留**。删它们需要同时
+   确认 `theme.js` 的切换按钮行为与相关测试（`tests/test_ui_theme_contract.py`
+   仍断言 `THEME_VALUES` 含 `"dark"`），不是单纯的 CSS 清理 —— 所以保留，
+   在此说明以免有人误以为深色还能用。
+
+   ## 尺度（本轮已收敛）
+
+   字号：正文区间已收敛到 11 / 12 / 14 / 16 四档（原 8~17px 混用）。
+   圆角：收敛到 4 / 6 / 8 / 12 / 16 / 999 / 50% / 0。
+   间距：1px 偏差的杂值已吸附到 4px 网格（2px 偏差的尚未处理）。
+
+   阴影**未收敛**（102 种）—— 解析多层阴影时反复出错，解析可靠性不足
+   时不动视觉核心属性。留待用可靠工具重做。
+
+   ========================================================================== */
+
 :root {
   --font-ui: "Noto Sans SC", "Microsoft YaHei UI", "PingFang SC", sans-serif;
   --radius-control: 6px;
