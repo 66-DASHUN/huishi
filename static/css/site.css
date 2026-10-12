@@ -1225,7 +1225,7 @@ button, input, select { font: inherit; }
 .work-folder-list img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; background: #2b2d35; }
 .work-folder-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-empty { display: block; padding: 10px; color: #7f8794; font-size: 14px; }
-.studio-main { min-width: 0; min-height: 100vh; position: relative; padding: 48px 5vw 140px; background: radial-gradient(circle at 52% 0%, rgba(0,200,215,.10), transparent 34%), linear-gradient(180deg, rgba(255,255,255,.44), rgba(248,250,252,0) 280px), var(--studio-main); overflow-x: hidden; }
+.studio-main { min-width: 0; min-height: 100vh; position: relative; display: flex; flex-direction: column; padding: 48px 5vw 140px; background: radial-gradient(circle at 52% 0%, rgba(0,200,215,.10), transparent 34%), linear-gradient(180deg, rgba(255,255,255,.44), rgba(248,250,252,0) 280px), var(--studio-main); overflow-x: hidden; }
 .studio-filterbar { position: fixed; z-index: 12; top: 24px; right: 48px; display: flex; align-items: center; gap: 4px; padding: 6px; border: 1px solid var(--studio-border); border-radius: 8px; background: var(--studio-floating); box-shadow: 0 18px 52px var(--studio-soft-shadow); backdrop-filter: blur(18px); }
 .studio-filterbar button, .studio-filterbar a, .studio-filterbar summary { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0 14px; border: 0; border-radius: 6px; background: transparent; color: var(--studio-text); font-weight: 800; cursor: pointer; white-space: nowrap; }
 .studio-filterbar button:hover, .studio-filterbar a:hover, .studio-filterbar summary:hover { background: var(--studio-control-hover); }
@@ -1286,8 +1286,13 @@ button, input, select { font: inherit; }
   font-weight: 900;
   box-shadow: 0 16px 42px rgba(21,25,34,.08);
 }
-.creation-stream { display: grid; gap: 18px; width: min(1120px, 100%); margin: 0 auto; padding-bottom: 12px; }
-.studio-main { padding-bottom: 260px; }
+/* 内容短时垂直居中：主区是列 flex，这里用自动外边距吸收剩余高度。
+   内容长时自动外边距归零，与原来完全一致、不影响滚动。 */
+.creation-stream { display: grid; gap: 18px; width: min(1120px, 100%); margin: auto auto; padding-bottom: 12px; }
+/* 底部预留随视口收缩。原来是固定 260px：内容短的时候，输入框钉在
+   视口底，两者之间就是一大片空白（视口 1440 高时达 727px）。
+   用 vh 让预留跟着视口走：小屏不被压缩、大屏不白留。 */
+.studio-main { padding-bottom: clamp(150px, 18vh, 260px); }
 .creation-stream { padding-bottom: 160px; }
 .empty-creation-stage {
   min-height: calc(100vh - 360px);
