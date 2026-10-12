@@ -3378,7 +3378,10 @@ button, input, select { font: inherit; }
 .account-balance-strip a:hover { transform: scale(0.97); box-shadow: var(--neu-shadow-pressed); }
 
 @media (max-width: 1180px) {
-  .studio-shell { grid-template-columns: 56px minmax(0, 1fr); }
+  .studio-shell {
+    grid-template-columns: 56px minmax(0, 1fr);
+    background-image: linear-gradient(90deg, var(--studio-rail) 0 56px, transparent 56px);
+  }
   .studio-sidebar { display: none; }
   .studio-main { padding: 50px 22px 100px; }
   .canvas-workspace-main { padding: 0; }
@@ -3408,7 +3411,11 @@ button, input, select { font: inherit; }
   .account-summary { align-items: start; flex-direction: column; }
   .ledger-row { grid-template-columns: minmax(0, 1fr); }
   .account-balance-strip { width: 100%; justify-content: space-between; border-radius: 8px; }
-  .studio-shell { grid-template-columns: 1fr; }
+  .studio-shell {
+    grid-template-columns: 1fr;
+    /* 窄屏 rail 变成顶部横条，不再铺竖向色条 */
+    background-image: none;
+  }
   .studio-rail { min-height: auto; height: auto; position: sticky; top: 0; z-index: 30; grid-template-columns: auto 1fr auto; grid-template-rows: auto; align-items: center; padding: 8px 12px; }
   .rail-logo { width: 36px; height: 36px; }
   .rail-nav, .rail-footer { display: flex; align-items: center; gap: 4px; }
@@ -6382,6 +6389,14 @@ button, input, select { font: inherit; }
     radial-gradient(circle at 52% 0%, rgba(133, 171, 139, .34), transparent 30%),
     linear-gradient(180deg, rgba(255, 255, 255, .76), rgba(238, 243, 237, 0) 300px),
     var(--studio-bg);
+  /* 侧栏背景铺满整页（详见 .studio-shell 处的说明）。
+     必须写在这里而不是只写在 .studio-shell 上：这条规则是 2 个类，
+     优先级更高，上面那句 `background:` 简写会把 .studio-shell 里设的
+     background-image 重置掉 —— 实测最终值就是 none。 */
+  background-image:
+    linear-gradient(90deg, var(--studio-rail) 0 56px, var(--studio-sidebar) 56px 276px, transparent 276px),
+    radial-gradient(circle at 52% 0%, rgba(133, 171, 139, .34), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, .76), rgba(238, 243, 237, 0) 300px);
 }
 
 .workspace-page .studio-main {
@@ -8776,6 +8791,9 @@ button, input, select { font: inherit; }
   min-height: 100vh;
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
+  /* 同 .studio-shell：后台侧栏也是 height:100vh + sticky，背景只到一屏。
+     在父容器按列宽铺出同样的底色，背景贯通整页，侧栏保持吸顶。 */
+  background-image: linear-gradient(90deg, var(--admin-surface) 0 232px, transparent 232px);
 }
 
 .admin-console-sidebar {
@@ -9664,6 +9682,7 @@ button, input, select { font: inherit; }
 @media (max-width: 1100px) {
   .admin-console-shell {
     grid-template-columns: 196px minmax(0, 1fr);
+    background-image: linear-gradient(90deg, var(--admin-surface) 0 196px, transparent 196px);
   }
 
   .admin-console-sidebar {
@@ -9947,6 +9966,15 @@ button, input, select { font: inherit; }
   --studio-soft-shadow: rgba(0, 0, 0, .34);
 }
 
+/* 侧栏背景铺满整页。
+   前面的 .studio-shell 规则（1 个类）与 .workspace-page .studio-shell（2 个类）
+   都会被**下面这条**的多选择器规则压过 —— 它是本表里最后一个给 shell
+   设 `background` 的地方（实测 CDP 的胜出规则就是它），而 `background:`
+   简写会把 background-image 重置成 none。所以渐变必须写在这里。
+
+   为什么不改侧栏自身高度：它们靠 `height: 100vh` + `position: sticky` 吸顶。
+   改成 height:100% 会让元素高于视口，sticky 失效、导航随页面滚走（已验证）。
+   把底色画在父容器上，两者就都保住了。 */
 .workspace-page,
 .console-page,
 .auth-page,
@@ -9954,6 +9982,8 @@ button, input, select { font: inherit; }
 .workspace-page .assets-shell,
 .workspace-page .asset-detail-shell {
   background: var(--color-bg);
+  background-image:
+    linear-gradient(90deg, var(--studio-rail) 0 56px, var(--studio-sidebar) 56px 276px, transparent 276px);
   color: var(--color-text);
   font-family: var(--font-ui);
 }
