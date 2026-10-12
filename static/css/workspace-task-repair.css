@@ -49,7 +49,7 @@
 .workspace-page .subject-popover .subject-file-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 205px; font-weight: 500; }
 .workspace-page .subject-popover .subject-list { max-height: 250px; overflow-y: auto; }
 .reference-mode-note { display: block; padding: 8px 12px; font-size: 11px; line-height: 1.5; color: #526075; }
-.workspace-page .task-failure-panel { width: 100%; max-width: 760px; padding: 18px; border: 1px solid #e1c8c8; border-radius: 12px; background: #fff; color: #334155; }
+.workspace-page .task-failure-panel { width: 100%; max-width: 760px; padding: 18px; border: 1px solid #e1c8c8; border-radius: 12px; background: #ffffff; color: #334155; }
 .workspace-page .task-error-message { color: #a52828; overflow-wrap: anywhere; }
 .workspace-page .task-failure-panel .task-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .workspace-page .task-failure-panel .task-actions button { min-height: 36px; padding: 6px 14px; border: 1px solid #dbe3ec; border-radius: 8px; background: #f8fafc; color: #334155; font: inherit; font-size: 13px; cursor: pointer; }
