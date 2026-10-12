@@ -99,13 +99,6 @@
   font-family: var(--font-ui);
 }
 
-.workspace-page :where(h1, h2, h3),
-.console-page :where(h1, h2, h3),
-.auth-page :where(h1, h2, h3) {
-  font-family: var(--font-ui);
-  font-style: normal;
-  letter-spacing: 0;
-}
 
 .workspace-page .studio-shell,
 .workspace-page .assets-shell,
@@ -179,11 +172,6 @@
   border-radius: var(--radius-panel);
 }
 
-.workspace-page .creation-action-group button,
-.workspace-page .creation-action-group a,
-.workspace-page .generation-task-card button {
-  border-radius: var(--radius-control);
-}
 
 .workspace-page [data-task-state="failed"] {
   border-color: color-mix(in oklch, var(--color-danger) 44%, var(--color-border));
@@ -308,19 +296,11 @@
   display: grid;
 }
 
-.asset-card-body strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .asset-detail-shell {
   background: var(--color-bg);
 }
 
-.asset-detail-shell .detail-image {
-  background: oklch(14% .005 250);
-}
 
 .asset-detail-shell .detail-panel {
   border-color: var(--color-border);
@@ -369,15 +349,6 @@
   color: var(--color-text);
 }
 
-.console-page .simple-nav,
-.auth-page .auth-panel,
-.console-page .account-summary,
-.console-page .settings-card,
-.console-page .pricing-card {
-  border-color: var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
 
 .console-page .simple-nav a {
   border-color: var(--color-border);
@@ -391,28 +362,8 @@
 }
 
 @media (max-width: 760px) {
-  .workspace-page .conversation-toggle {
-    display: grid;
-  }
 
-  .workspace-page .studio-sidebar {
-    position: fixed;
-    inset: 64px auto 0 0;
-    z-index: 45;
-    display: block;
-    width: min(300px, calc(100vw - 32px));
-    max-height: calc(100dvh - 64px);
-    overflow-y: auto;
-    visibility: hidden;
-    transform: translateX(-105%);
-    transition: transform 180ms ease, visibility 180ms ease;
-    box-shadow: 18px 0 48px rgba(0, 0, 0, .2);
-  }
 
-  .workspace-page .studio-sidebar.is-open {
-    visibility: visible;
-    transform: translateX(0);
-  }
 }
 
 /* Override the retired forced-dark console pass with the selected semantic theme. */
@@ -429,19 +380,7 @@
   display: none !important;
 }
 
-:root[data-theme="light"] body.console-page,
-:root[data-theme="light"] body.auth-page,
-:root[data-theme="light"] body.console-page :where(input, select, textarea),
-:root[data-theme="light"] body.auth-page :where(input, select, textarea) {
-  color-scheme: light;
-}
 
-:root[data-theme="dark"] body.console-page,
-:root[data-theme="dark"] body.auth-page,
-:root[data-theme="dark"] body.console-page :where(input, select, textarea),
-:root[data-theme="dark"] body.auth-page :where(input, select, textarea) {
-  color-scheme: dark;
-}
 
 :root[data-theme] body.console-page :where(h1, h2, h3),
 :root[data-theme] body.auth-page :where(h1, h2, h3) {
@@ -614,10 +553,6 @@ body {
   outline-offset: 2px;
 }
 
-.workspace-page {
-  background: var(--studio-bg, var(--paper));
-  color: var(--studio-text, var(--ink));
-}
 
 .workspace-page .studio-shell,
 .workspace-page .assets-shell,
@@ -774,8 +709,6 @@ button, input, select { font: inherit; }
 .feature-grid p, .contact-card p { margin: 0; color: rgba(248,242,228,.72); font-size: 14px; line-height: 1.75; }
 .contact-section { display: grid; grid-template-columns: 1.2fr .8fr; gap: 48px; align-items: center; }
 .auth-page, .workspace-page { background: var(--paper); color: var(--ink); }
-.auth-panel { width: min(430px, calc(100vw - 32px)); margin: 12vh auto; padding: 30px; border: 1px solid rgba(16,17,20,.1); border-radius: var(--radius); background: var(--panel); box-shadow: 0 24px 80px rgba(16,17,20,.12); }
-.auth-panel h1 { margin: 18px 0 8px; font-size: clamp(30px, 5vw, 46px); line-height: 1; }
 .auth-form { display: grid; gap: 12px; }
 .auth-code-form { grid-template-columns: minmax(0, 1fr) 116px; align-items: end; margin-bottom: 12px; }
 .auth-code-form label { min-width: 0; }
@@ -1281,7 +1214,6 @@ button, input, select { font: inherit; }
 .creation-stream { display: grid; gap: 18px; width: min(1120px, 100%); margin: 0 auto; padding-bottom: 12px; }
 .studio-main { padding-bottom: 260px; }
 .creation-stream { padding-bottom: 160px; }
-.creation-item { scroll-margin-bottom: 260px; }
 .empty-creation-stage {
   min-height: calc(100vh - 360px);
   display: grid;
@@ -1788,12 +1720,10 @@ button, input, select { font: inherit; }
   font-weight: 900;
 }
 .workspace-page .composer .parameter-trigger { min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; cursor: pointer; white-space: nowrap; }
-.workspace-page .composer .parameter-trigger { flex: 0 0 126px; }
 .parameter-trigger span { color: var(--studio-muted); font-size: 9px; letter-spacing: .04em; line-height: 1; }
 .parameter-trigger strong { color: inherit; font-size: 13px; font-weight: 900; line-height: 1; }
 .parameter-trigger #resolution-label { padding-left: 4px; color: var(--studio-muted); font-size: 12px; }
 .parameter-trigger small { color: var(--studio-muted); font-size: 12px; line-height: 1; }
-.ratio-grid button { display: grid; grid-template-columns: 1fr; justify-items: center; align-content: center; gap: 6px; padding: 10px 4px; }
 .ratio-icon { display: block; border: 1px solid currentColor; border-radius: 4px; background: transparent; opacity: .85; }
 .ratio-icon-wide { width: 24px; height: 10px; }
 .ratio-icon-landscape { width: 22px; height: 12px; }
@@ -3027,10 +2957,6 @@ button, input, select { font: inherit; }
   box-shadow: 0 8px 24px rgba(0,0,0,.14);
 }
 
-.asset-select {
-  width: 16px;
-  height: 16px;
-}
 
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -3413,7 +3339,6 @@ button, input, select { font: inherit; }
   .rail-nav, .rail-footer { display: flex; align-items: center; gap: 4px; }
   .rail-nav a, .rail-footer a { min-height: 40px; padding: 0 9px; }
   .rail-settings-panel { left: auto; right: 0; bottom: auto; top: calc(100% + 8px); }
-  .studio-main { padding: 66px 14px 180px; }
   .studio-main { padding: 66px 14px 300px; }
   .canvas-workspace-main { padding: 0; }
   .canvas-workspace-frame,
@@ -3644,13 +3569,6 @@ button, input, select { font: inherit; }
   min-height: 100vh;
 }
 
-.auth-page h1, .auth-page h2, .auth-page h3,
-.console-page h1, .console-page h2, .console-page h3 {
-  font-family: "Instrument Serif", Georgia, serif;
-  font-style: italic;
-  color: var(--c-cream);
-  letter-spacing: 0;
-}
 
 /* shared glass cards/inputs/buttons ------------------------- */
 .auth-page input, .auth-page select, .auth-page textarea,
@@ -3721,7 +3639,6 @@ button, input, select { font: inherit; }
 .auth-page .dev-code-box span { color: var(--c-muted); }
 .auth-page .dev-code-box strong { color: var(--c-cream); }
 /* ===== Console pages (settings / pricing / account / admin) ===== */
-.console-page { background: var(--c-bg); color: var(--c-cream); }
 .console-page::before {
   content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
@@ -3729,7 +3646,6 @@ button, input, select { font: inherit; }
     radial-gradient(circle at 92% 0%, rgba(121,205,226,.1), transparent 46%);
 }
 .console-page .simple-page { position: relative; z-index: 1; }
-.console-page .simple-nav { margin-bottom: 40px; }
 .console-page .simple-nav a {
   min-height: 38px; border-radius: 999px;
   border: 1px solid var(--c-line);
@@ -3753,15 +3669,6 @@ button, input, select { font: inherit; }
 .console-page .section-heading h2 {
   font-family: "Instrument Serif", Georgia, serif;
   font-style: italic; font-weight: 400; font-size: 28px;
-}
-.console-page .section-heading a {
-  border: 1px solid var(--c-line); border-radius: 999px;
-  background: var(--c-glass-2); color: var(--c-cream);
-}
-.console-page .section-heading a:hover { background: rgba(246,242,231,.16); }
-.console-page .empty-workspace {
-  border: 1px dashed var(--c-line); border-radius: 14px;
-  background: var(--c-glass); color: var(--c-muted);
 }
 
 /* shared inputs + selects on auth + console */
@@ -3871,10 +3778,6 @@ button, input, select { font: inherit; }
 .console-page .ledger-row span { color: var(--c-muted); }
 .console-page .ledger-row span:nth-child(2) { color: var(--c-cream); }
 .console-page .ledger-row small { color: var(--c-muted); }
-.console-page .empty-workspace {
-  border: 1px dashed var(--c-line); border-radius: 14px;
-  background: var(--c-glass); color: var(--c-muted);
-}
 
 /* pricing */
 .console-page .pricing-summary-unified,
@@ -3976,9 +3879,6 @@ button, input, select { font: inherit; }
 .console-page .table-action-form button.danger-button { background: var(--c-red); color: #fff; }
 .console-page .admin-bulk-actions button.danger-button:hover,
 .console-page .table-action-form button.danger-button:hover { background: #b83636; }
-.console-page .admin-import-export form {
-  background: var(--c-glass-2); border: 1px solid var(--c-line); border-radius: 14px;
-}
 .console-page .admin-bulk-actions { background: var(--c-glass-2); border-bottom: 1px solid var(--c-line); }
 .console-page .admin-bulk-actions span { color: var(--c-muted); }
 .console-page .invite-edit-form label:not(.table-checkbox) { color: var(--c-muted); }
@@ -3989,11 +3889,8 @@ button, input, select { font: inherit; }
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
 .console-page .admin-user-table th, .console-page .admin-user-table td { border-bottom: 1px solid var(--c-line); color: var(--c-cream); }
-.console-page .admin-user-table th { background: rgba(12,14,12,.92); color: var(--c-muted); }
-.console-page .admin-user-table tbody tr:hover { background: rgba(248,242,228,.05); }
 .console-page .admin-user-table td small { color: var(--c-muted); }
 .console-page .verify-pill.verified { background: rgba(127,214,160,.16); color: #7fd6a0; }
-.console-page .verify-pill.pending { background: rgba(217,179,95,.16); color: var(--c-gold); }
 .console-page .table-muted { color: var(--c-muted); }
 .console-page .table-link { color: #7fd6a0; }
 .console-page .role-pill { border: 1px solid var(--c-line); background: var(--c-glass-2); color: var(--c-cream); }
@@ -4465,9 +4362,6 @@ button, input, select { font: inherit; }
   color: var(--ui-text);
 }
 
-.console-page .simple-nav a:hover {
-  background: var(--ui-surface-strong);
-}
 
 .config-shell {
   display: grid;
@@ -4783,9 +4677,6 @@ button, input, select { font: inherit; }
   padding: 0;
 }
 
-.console-page .admin-table-wrap {
-  overflow-x: auto;
-}
 
 .console-page .admin-user-table {
   width: 100%;
@@ -4814,9 +4705,6 @@ button, input, select { font: inherit; }
   letter-spacing: .08em;
 }
 
-.console-page .admin-user-table tbody tr:hover {
-  background: rgba(217,179,95,.04);
-}
 
 .console-page .admin-bulk-actions {
   position: sticky;
@@ -5055,9 +4943,6 @@ button, input, select { font: inherit; }
   grid-template-columns: minmax(88px, 1fr) 82px;
 }
 
-.console-page .table-action-form.adjust {
-  grid-template-columns: minmax(68px, .8fr) minmax(96px, 1fr) 62px;
-}
 
 .console-page .table-action-form.compact-delete {
   grid-template-columns: 1fr;
@@ -5161,17 +5046,6 @@ button, input, select { font: inherit; }
   -webkit-backdrop-filter: none;
 }
 
-.console-page .settings-console-summary article {
-  min-height: 126px;
-  display: grid;
-  align-content: space-between;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--ui-line);
-  border-radius: 8px;
-  background: var(--ui-surface);
-  overflow: hidden;
-}
 
 .console-page .settings-health-summary article.is-ok {
   border-color: color-mix(in srgb, #2f9e6f 42%, var(--ui-line));
@@ -5812,7 +5686,6 @@ button, input, select { font: inherit; }
 .console-page .provider-row-card .provider-field-priority { grid-column: 5; }
 .console-page .provider-row-card .provider-enabled { grid-column: 6; }
 .console-page .provider-row-card .provider-resolution-group { grid-column: 1 / span 3; grid-row: 2; }
-.console-page .provider-row-card .provider-actions { grid-column: 7; }
 .console-page .provider-row-card .provider-card-actions { grid-column: 8; }
 .console-page .provider-row-card.provider-card-new .provider-actions,
 .console-page .provider-row-card.provider-card-new button[type="submit"] { grid-column: 7; }
@@ -10050,9 +9923,6 @@ button, input, select { font: inherit; }
   border-radius: var(--radius-control);
 }
 
-.asset-detail-shell .detail-image {
-  background: oklch(14% .005 250);
-}
 
 .asset-detail-shell .detail-prompt-card,
 .canvas-empty-state,
@@ -10306,13 +10176,6 @@ button, input, select { font: inherit; }
 }
 
 /* Compact system settings tables */
-.admin-console-page .settings-console-hero h1 {
-  font-family: var(--font-ui);
-  font-size: 28px;
-  font-style: normal;
-  font-weight: 680;
-  letter-spacing: 0;
-}
 
 .admin-console-page .settings-console-form {
   width: 100%;
@@ -10370,20 +10233,7 @@ button, input, select { font: inherit; }
   padding: 0 12px;
 }
 
-.admin-console-page .settings-section-nav a {
-  padding: 7px 12px;
-  border-radius: 4px;
-  color: var(--admin-muted);
-  font-size: 12px;
-  font-weight: 650;
-  text-decoration: none;
-}
 
-.admin-console-page .settings-section-nav a:hover,
-.admin-console-page .settings-section-nav a:focus-visible {
-  color: var(--admin-ink);
-  background: var(--admin-soft);
-}
 
 .admin-console-page .settings-section-nav a:focus-visible {
   outline: 2px solid var(--color-primary);
