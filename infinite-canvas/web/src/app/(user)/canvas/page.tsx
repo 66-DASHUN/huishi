@@ -8,7 +8,6 @@ import { Download, FileUp, Plus } from "lucide-react";
 import { readZip } from "@/lib/zip";
 import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
-import { withBasePath } from "@/lib/app-path";
 import { CanvasDeleteProjectsDialog } from "./components/canvas-delete-projects-dialog";
 import { CanvasHostSessionGuard } from "./components/canvas-host-session-guard";
 import { CanvasProjectCard } from "./components/canvas-project-card";
@@ -68,7 +67,7 @@ function CanvasProjectsPage() {
     }, []);
     const enterProject = useCallback(
         (id: string) => {
-            router.push(withBasePath(`/canvas/${id}${agentQuery}${hostSessionFragment}`));
+            router.push(`/canvas/${id}${agentQuery}${hostSessionFragment}`);
         },
         [agentQuery, hostSessionFragment, router],
     );
@@ -108,7 +107,7 @@ function CanvasProjectsPage() {
             if (!hydrated || autoOpenRef.current) return;
             autoOpenRef.current = true;
             createProject(nextCanvasProjectTitle(projects, "新建画布"));
-            router.replace(withBasePath(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`));
+            router.replace(`/canvas${hostSessionQuery ? `?${hostSessionQuery}` : ""}`);
             return;
         }
         if (!hydrated || autoOpenRef.current || effectiveMode !== "recent") return;

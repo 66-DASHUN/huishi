@@ -2,11 +2,17 @@
  * 应用内的路径前缀。
  *
  * 画布默认挂在主站的同域子路径下（`/canvas-app`），这样用户看到的始终是绘世
- * 的地址，不会出现另一个域名加端口。Next 的 `basePath` 会自动给 `_next/*`
- * 静态资源、`<Link>` 和 `next/navigation` 的路由加上前缀，但**手写的字符串
- * 不会** —— `router.push("/canvas/1")`、`href="/settings"`、`fetch("/webdav-proxy")`
- * 这些必须自己带前缀，否则在子路径部署下会跳到主站的根路径去（404 或串到
- * 主站页面）。这个模块就是那一个出口。
+ * 的地址，不会出现另一个域名加端口。
+ *
+ * **加前缀的边界**（2026-10-15 实测更正；此前这段注释把 `router.push` 也列进
+ * 了"必须自己加前缀"，正是画布 404 的成因）：
+ *
+ * - `_next/*`、`<Link>`、`router.push()` / `router.replace()` —— Next **自己会加**。
+ *   `next.config.ts` 没开 `experimental.manualClientBasePath`，`addBasePath()`
+ *   必然生效。**再手动套一层就是双前缀**，线上实测：
+ *   `GET /canvas-app/canvas-app/canvas/<id> -> 404`。
+ * - 手写字符串 —— 只有这些才需要本模块：`fetch()`、`<img src>`、`window.open()`、
+ *   `new URL()` 等不经 Next 路由层的地址。
  *
  * 构建时由 `NEXT_PUBLIC_CANVAS_BASE_PATH` 注入；为空表示部署在根路径
  * （本地开发、独立域名部署），此时所有函数退化为原样返回。
