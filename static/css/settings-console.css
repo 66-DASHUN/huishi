@@ -65,7 +65,7 @@
   min-height: 36px;
   padding: 0 7px;
   border: 1px solid var(--admin-line-strong);
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--admin-surface);
   color: var(--admin-ink);
   font: inherit;
@@ -85,7 +85,7 @@
   margin: 0;
   padding: 10px 11px;
   border: 1px solid var(--admin-line);
-  border-radius: 5px;
+  border-radius: 6px;
   background: var(--admin-soft);
   color: var(--admin-muted);
   font-size: 12px;

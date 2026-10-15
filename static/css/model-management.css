@@ -1,4 +1,4 @@
-.model-management, .mm-dialog { --mm-muted: var(--admin-muted, #626b78); color: var(--admin-ink); font-size: 13px; }
+.model-management, .mm-dialog { --mm-muted: var(--admin-muted, #626b78); color: var(--admin-ink); font-size: 12px; }
 .model-management [hidden], .mm-dialog [hidden] { display: none !important; }
 .mm-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--admin-line); padding: 0 20px; overflow-x: auto; }
 .mm-tabs [role=tab] { flex: 0 0 auto; padding: 12px 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--mm-muted); box-shadow: none; font: inherit; font-weight: 600; }
@@ -33,7 +33,7 @@
 .mm-legacy { margin: 16px 20px; font-size: 12px; }
 .mm-legacy summary, .mm-advanced summary, .mm-binding summary { cursor: pointer; padding: 8px 0; }
 .mm-legacy ul { padding-left: 20px; line-height: 1.8; }
-.mm-dialog { width: min(620px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 0; border: 1px solid var(--admin-line-strong); border-radius: 10px; background: var(--admin-surface); overflow: auto; }
+.mm-dialog { width: min(620px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 0; border: 1px solid var(--admin-line-strong); border-radius: 12px; background: var(--admin-surface); overflow: auto; }
 .mm-dialog::backdrop { background: rgb(0 0 0 / .45); }
 .mm-dialog > form { margin: 0; }
 .mm-dialog :is(header,footer) { display: flex; align-items: center; gap: 10px; padding: 16px 22px; background: var(--admin-surface); position: sticky; z-index: 1; }

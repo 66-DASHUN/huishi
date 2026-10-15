@@ -3354,7 +3354,7 @@ button, input, select { font: inherit; }
 .pricing-desc {
   display: block;
   color: var(--muted) !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
   line-height: 1.6 !important;
 }
 .account-balance-strip {
@@ -11191,7 +11191,7 @@ button, input, select { font: inherit; }
   font-family: var(--font-ui) !important;
   font-size: 32px !important;
   font-style: normal !important;
-  font-weight: 720 !important;
+  font-weight: 700 !important;
   letter-spacing: 0 !important;
 }
 .admin-console-page .settings-console-form .settings-section-nav {
@@ -11247,7 +11247,7 @@ button, input, select { font: inherit; }
   font-family: var(--font-ui) !important;
   font-size: 40px !important;
   font-style: normal !important;
-  font-weight: 720 !important;
+  font-weight: 700 !important;
   letter-spacing: 0 !important;
 }
 .console-page .billing-public-page .page-hero p { max-width: 62ch; color: var(--color-text-muted) !important; }

@@ -26,7 +26,7 @@
 .workspace-page .composer .generate-button { min-width: 42px; width: 42px; height: 42px; padding: 0; border-radius: 50%; flex: 0 0 42px; }
 .workspace-page .composer .generate-icon { display: inline; font-size: 25px; }
 .workspace-page .composer .generate-text { display: none; }
-.workspace-page #video-reference-panel { padding: 6px; border-radius: 10px; }
+.workspace-page #video-reference-panel { padding: 6px; border-radius: 12px; }
 .workspace-page #video-reference-panel > .popover-title { display: none; }
 .workspace-page .video-reference-grid { padding: 0; margin: 0; border: 0; background: transparent; gap: 2px; }
 .workspace-page .video-reference-grid button {
